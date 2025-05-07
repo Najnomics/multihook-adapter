@@ -9,7 +9,6 @@ import {IImmutableState} from "../interfaces/IImmutableState.sol";
 /// @notice Original implementation: https://github.com/Uniswap/v4-periphery/blob/main/src/base/ImmutableState.sol
 
 contract ImmutableState is IImmutableState {
-
     IMultiHookAdapterBase public immutable multiHookAdapter;
 
     /// @notice thrown when caller is not a MultiHookAdapter contract
@@ -21,5 +20,4 @@ contract ImmutableState is IImmutableState {
     constructor(IMultiHookAdapterBase _multiHookAdapter) {
         multiHookAdapter = _multiHookAdapter;
     }
-
 }

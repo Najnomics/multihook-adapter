@@ -36,90 +36,68 @@ contract BaseHookExtensionTest is Test {
     function test_OnlyMultiHookAdapterCanCallBeforeInitialize() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.beforeInitialize(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), 0);
+        hook.beforeInitialize(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            0
+        );
     }
 
     function test_OnlyMultiHookAdapterCanCallAfterInitialize() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.afterInitialize(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), 0, 0);
+        hook.afterInitialize(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            0,
+            0
+        );
     }
 
     function test_OnlyMultiHookAdapterCanCallBeforeSwap() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.beforeSwap(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), SwapParams({
-            zeroForOne: true,
-            amountSpecified: 0,
-            sqrtPriceLimitX96: 0
-        }), "");
+        hook.beforeSwap(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            SwapParams({zeroForOne: true, amountSpecified: 0, sqrtPriceLimitX96: 0}),
+            ""
+        );
     }
 
     function test_OnlyMultiHookAdapterCanCallAfterSwap() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.afterSwap(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), SwapParams({
-            zeroForOne: true,
-            amountSpecified: 0,
-            sqrtPriceLimitX96: 0
-        }), toBalanceDelta(0, 0), "");
+        hook.afterSwap(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            SwapParams({zeroForOne: true, amountSpecified: 0, sqrtPriceLimitX96: 0}),
+            toBalanceDelta(0, 0),
+            ""
+        );
     }
 
     function test_OnlyMultiHookAdapterCanCallBeforeAddLiquidity() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.beforeAddLiquidity(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), ModifyLiquidityParams({
-            tickLower: 0,
-            tickUpper: 0,
-            liquidityDelta: 0,
-            salt: bytes32(0)
-        }), "");
+        hook.beforeAddLiquidity(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            ModifyLiquidityParams({tickLower: 0, tickUpper: 0, liquidityDelta: 0, salt: bytes32(0)}),
+            ""
+        );
     }
 
     function test_OnlyMultiHookAdapterCanCallAfterAddLiquidity() public {
         vm.prank(unauthorizedCaller);
         vm.expectRevert("Caller is not the MultiHookAdapter");
-        hook.afterAddLiquidity(address(0), PoolKey({
-            currency0: currency0,
-            currency1: currency1,
-            fee: 0,
-            tickSpacing: 0,
-            hooks: IHooks(address(0))
-        }), ModifyLiquidityParams({
-            tickLower: 0,
-            tickUpper: 0,
-            liquidityDelta: 0,
-            salt: bytes32(0)
-        }), toBalanceDelta(0, 0), toBalanceDelta(0, 0), "");
+        hook.afterAddLiquidity(
+            address(0),
+            PoolKey({currency0: currency0, currency1: currency1, fee: 0, tickSpacing: 0, hooks: IHooks(address(0))}),
+            ModifyLiquidityParams({tickLower: 0, tickUpper: 0, liquidityDelta: 0, salt: bytes32(0)}),
+            toBalanceDelta(0, 0),
+            toBalanceDelta(0, 0),
+            ""
+        );
     }
 }
