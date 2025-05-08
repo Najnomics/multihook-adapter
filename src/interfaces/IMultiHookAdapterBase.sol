@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 /// @title IMultiHookAdapterBase
 /// @notice An interface for the MultiHookAdapterBase contract

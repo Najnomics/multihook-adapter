@@ -1,14 +1,14 @@
 // SPDX-License-identifiery: MIT
 pragma solidity ^0.8.0;
 
-import {Hooks} from "@uniswap/v4-core/libraries/Hooks.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
-import {IHooks} from "@uniswap/v4-core/interfaces/IHooks.sol";
-import {BalanceDelta} from "@uniswap/v4-core/types/BalanceDelta.sol";
-import {PoolKey} from "@uniswap/v4-core/types/PoolKey.sol";
-import {BeforeSwapDelta} from "@uniswap/v4-core/types/BeforeSwapDelta.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {BeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {ImmutableState} from "./ImmutableState.sol";
-import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/types/PoolOperation.sol";
+import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol";
 
 /// @title BaseHookExtension
 /// @notice An extension of the original UniswapV4 BaseHook contract purposed for the MultiHookAdapter

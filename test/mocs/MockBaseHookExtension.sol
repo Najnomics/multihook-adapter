@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {BaseHook} from "../../src/utils/BaseHookExtension.sol";
 import {IMultiHookAdapterBase} from "../../src/interfaces/IMultiHookAdapterBase.sol";
-import {Hooks} from "@uniswap/v4-core/libraries/Hooks.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
 
 contract MockBaseHook is BaseHook {
     constructor(IMultiHookAdapterBase adapter) BaseHook(adapter) {}

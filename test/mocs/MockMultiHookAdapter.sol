@@ -2,11 +2,11 @@
 pragma solidity ^0.8.0;
 
 import {IMultiHookAdapterBase} from "../../src/interfaces/IMultiHookAdapterBase.sol";
-import {IPoolManager} from "@uniswap/v4-core/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/types/PoolKey.sol";
-import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/types/PoolOperation.sol";
-import {BalanceDelta, toBalanceDelta} from "@uniswap/v4-core/types/BalanceDelta.sol";
-import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/types/BeforeSwapDelta.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol";
+import {BalanceDelta, toBalanceDelta} from "v4-core/types/BalanceDelta.sol";
+import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 
 contract MockMultiHookAdapter is IMultiHookAdapterBase {
     IPoolManager public immutable poolManager;
