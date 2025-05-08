@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
-import {BaseHook} from "../../src/utils/BaseHookExtension.sol";
+import {BaseHookExtension} from "../../src/utils/BaseHookExtension.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IMultiHookAdapterBase} from "../../src/interfaces/IMultiHookAdapterBase.sol";
-import {Hooks} from "v4-core/libraries/Hooks.sol";
 
-contract MockBaseHook is BaseHook {
-    constructor(IMultiHookAdapterBase adapter) BaseHook(adapter) {}
+contract MockSubHook is BaseHookExtension {
+    constructor(IHooks adapter) BaseHookExtension(adapter) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
@@ -28,7 +29,7 @@ contract MockBaseHook is BaseHook {
     }
 
     // Override validateHookAddress to allow testing
-    function validateHookAddress(BaseHook _this) internal pure override {
+    function validateHookAddress(BaseHookExtension _this) internal pure override {
         // Skip validation for testing
     }
 }

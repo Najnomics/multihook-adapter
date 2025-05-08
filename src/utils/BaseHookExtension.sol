@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {Hooks} from "v4-core/libraries/Hooks.sol";
-import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
@@ -20,7 +19,8 @@ import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol
 abstract contract BaseHookExtension is IHooks, ImmutableState {
     error HookNotImplemented();
 
-    constructor(IMultiHookAdapterBase _adapter) ImmutableState(_adapter) {
+    /// @dev _adapter would be a derivative of the BaseHooks (not BaseHooksExtension) contract
+    constructor(IHooks _adapter) ImmutableState(_adapter) {
         validateHookAddress(this);
     }
 

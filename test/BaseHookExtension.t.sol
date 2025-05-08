@@ -2,8 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {BaseHook} from "../src/utils/BaseHookExtension.sol";
-import {IMultiHookAdapterBase} from "../src/interfaces/IMultiHookAdapterBase.sol";
+import {BaseHookExtension} from "../src/utils/BaseHookExtension.sol";
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol";
@@ -12,18 +11,18 @@ import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.
 import {Currency} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {MockMultiHookAdapter} from "./mocs/MockMultiHookAdapter.sol";
-import {MockBaseHook} from "./mocs/MockBaseHookExtension.sol";
+import {MockSubHook} from "./mocs/MockSubHook.sol";
 
 contract BaseHookExtensionTest is Test {
     MockMultiHookAdapter public adapter;
-    MockBaseHook public hook;
+    MockSubHook public hook;
     address public unauthorizedCaller;
     Currency public currency0;
     Currency public currency1;
 
     function setUp() public {
         adapter = new MockMultiHookAdapter();
-        hook = new MockBaseHook(adapter);
+        hook = new MockSubHook(adapter);
         unauthorizedCaller = address(0x123);
         currency0 = Currency.wrap(address(0x1));
         currency1 = Currency.wrap(address(0x2));

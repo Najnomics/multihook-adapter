@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {IImmutableState} from "../interfaces/IImmutableState.sol";
 
 /// @title Immutable State
@@ -9,7 +9,7 @@ import {IImmutableState} from "../interfaces/IImmutableState.sol";
 /// @notice Original implementation: https://github.com/Uniswap/v4-periphery/blob/main/src/base/ImmutableState.sol
 
 contract ImmutableState is IImmutableState {
-    IMultiHookAdapterBase public immutable multiHookAdapter;
+    IHooks public immutable multiHookAdapter;
 
     /// @notice thrown when caller is not a MultiHookAdapter contract
     modifier onlyMultiHookAdapter() {
@@ -17,7 +17,7 @@ contract ImmutableState is IImmutableState {
         _;
     }
 
-    constructor(IMultiHookAdapterBase _multiHookAdapter) {
+    constructor(IHooks _multiHookAdapter) {
         multiHookAdapter = _multiHookAdapter;
     }
 }
