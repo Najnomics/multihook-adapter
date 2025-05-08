@@ -15,9 +15,9 @@ import {ModifyLiquidityParams, SwapParams} from "v4-core/types/PoolOperation.sol
 /// @dev This contract copies all concepts as is from the original UniswapV4 BaseHook contract
 /// @dev The modification here lies in the access control seeded to the MultiHookAdapter contract
 ///      instead of the PoolManager contract. In essense, this contract is a direct copy of the original
-/// @notice Original implementation: https://github.com/Uniswap/v4-periphery/blob/444c526b77d804590f0d7bc5a481af5a3277c952/src/utils/BaseHook.sol
+/// @notice Original implementation: https://github.com/Uniswap/v4-periphery/blob/444c526b77d804590f0d7bc5a481af5a3277c952/src/utils/BaseHookExtension.sol
 
-abstract contract BaseHook is IHooks, ImmutableState {
+abstract contract BaseHookExtension is IHooks, ImmutableState {
     error HookNotImplemented();
 
     constructor(IMultiHookAdapterBase _adapter) ImmutableState(_adapter) {
@@ -33,7 +33,7 @@ abstract contract BaseHook is IHooks, ImmutableState {
     /// @dev this function is virtual so that we can override it during testing,
     /// which allows us to deploy an implementation to any address
     /// and then etch the bytecode into the correct address
-    function validateHookAddress(BaseHook _this) internal pure virtual {
+    function validateHookAddress(BaseHookExtension _this) internal pure virtual {
         Hooks.validateHookPermissions(_this, getHookPermissions());
     }
 
