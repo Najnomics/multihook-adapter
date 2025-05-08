@@ -241,7 +241,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         bool addedLiquidity = params.liquidityDelta > 0;
         // Initialize combined balance delta to zero
         BalanceDelta combinedDelta = BalanceDeltaLibrary.ZERO_DELTA;
-        
+
         if (addedLiquidity) {
             combinedDelta = _processAfterAddLiquidity(subHooks, sender, key, params, delta, feesAccrued, data);
             return (IHooks.afterAddLiquidity.selector, combinedDelta);
@@ -263,10 +263,10 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     ) private returns (BalanceDelta) {
         BalanceDelta combinedDelta = BalanceDeltaLibrary.ZERO_DELTA;
         uint256 length = subHooks.length;
-        
+
         for (uint256 i = 0; i < length; i++) {
             uint160 hookPerms = uint160(address(subHooks[i]));
-            
+
             if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_FLAG != 0) {
                 // If sub-hook has afterAddLiquidityReturnDelta, it returns a BalanceDelta
                 if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
@@ -291,7 +291,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                 }
             }
         }
-        
+
         return combinedDelta;
     }
 
@@ -307,16 +307,14 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     ) private returns (BalanceDelta) {
         BalanceDelta combinedDelta = BalanceDeltaLibrary.ZERO_DELTA;
         uint256 length = subHooks.length;
-        
+
         for (uint256 i = 0; i < length; i++) {
             uint160 hookPerms = uint160(address(subHooks[i]));
-            
+
             if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_FLAG != 0) {
                 if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(
-                            IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, data
-                        )
+                        abi.encodeWithSelector(IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, data)
                     );
                     require(success, "Sub-hook afterRemoveLiquidity failed");
                     (bytes4 sel, BalanceDelta hookDelta) = abi.decode(result, (bytes4, BalanceDelta));
@@ -336,7 +334,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                 }
             }
         }
-        
+
         return combinedDelta;
     }
 }
