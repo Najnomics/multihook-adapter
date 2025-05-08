@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {RegisterHooksTest} from "./hooks/RegisterHooksTest.sol";
 import {BeforeInitializeTest} from "./hooks/BeforeInitializeTest.sol";
 import {AfterInitializeTest} from "./hooks/AfterInitializeTest.sol";
+import {BeforeAddLiquidityTest} from "./hooks/BeforeAddLiquidityTest.sol";
 
 /**
  * @title RunAllTests

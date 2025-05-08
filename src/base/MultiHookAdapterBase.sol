@@ -167,7 +167,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         PoolKey calldata key,
         ModifyLiquidityParams calldata params,
         bytes calldata data
-    ) internal onlyPoolManager lock returns (bytes4) {
+    ) internal onlyPoolManager returns (bytes4) {
         PoolId poolId = key.toId();
         IHooks[] storage subHooks = _hooksByPool[poolId];
         bool addingLiquidity = params.liquidityDelta > 0;
@@ -187,7 +187,6 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                         "Invalid beforeAddLiquidity return"
                     );
                 }
-                return IHooks.beforeAddLiquidity.selector;
             } else {
                 // If removing liquidity, call sub-hook if it has beforeRemoveLiquidity permission
                 if (hookPerms & Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG != 0) {
@@ -200,8 +199,10 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                         "Invalid beforeRemoveLiquidity return"
                     );
                 }
-                return IHooks.beforeRemoveLiquidity.selector;
             }
         }
+        
+        // Return the appropriate selector based on the operation type
+        return addingLiquidity ? IHooks.beforeAddLiquidity.selector : IHooks.beforeRemoveLiquidity.selector;
     }
 }
