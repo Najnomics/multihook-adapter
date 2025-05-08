@@ -281,7 +281,9 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     combinedDelta = add(combinedDelta, hookDelta);
                 } else {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(IHooks.afterAddLiquidity.selector, sender, key, params, delta, data)
+                        abi.encodeWithSelector(
+                            IHooks.afterAddLiquidity.selector, sender, key, params, delta, feesAccrued, data
+                        )
                     );
                     require(success, "Sub-hook afterAddLiquidity failed");
                     require(
