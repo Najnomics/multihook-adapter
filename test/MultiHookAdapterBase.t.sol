@@ -497,6 +497,181 @@ contract MultiHookAdapterBaseTest is Test, Deployers {
             result, IHooks.beforeInitialize.selector, "Should return beforeInitialize selector with no hooks registered"
         );
     }
+
+    function test_BeforeInitialize_ExecutionOrder() public {
+        // Setup
+        address sender = address(0x123);
+        PoolKey memory testPoolKey = PoolKey({
+            currency0: Currency.wrap(address(0)),
+            currency1: Currency.wrap(address(1)),
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: IHooks(address(adapter))
+        });
+        uint160 sqrtPriceX96 = SQRT_PRICE_1_1;
+
+        // Create multiple hooks with BEFORE_INITIALIZE_FLAG at different addresses
+        HookWithEvents firstHook;
+        HookWithEvents secondHook;
+        HookWithEvents thirdHook;
+
+        // Deploy hooks with the same flag but at different addresses
+        address firstHookAddress = address(uint160(0x1000 | Hooks.BEFORE_INITIALIZE_FLAG));
+        deployCodeTo("HookWithEvents.sol", "", firstHookAddress);
+        firstHook = HookWithEvents(firstHookAddress);
+
+        address secondHookAddress = address(uint160(0x2000 | Hooks.BEFORE_INITIALIZE_FLAG));
+        deployCodeTo("HookWithEvents.sol", "", secondHookAddress);
+        secondHook = HookWithEvents(secondHookAddress);
+
+        address thirdHookAddress = address(uint160(0x3000 | Hooks.BEFORE_INITIALIZE_FLAG));
+        deployCodeTo("HookWithEvents.sol", "", thirdHookAddress);
+        thirdHook = HookWithEvents(thirdHookAddress);
+
+        // Register hooks in a specific order
+        address[] memory hooks = new address[](3);
+        hooks[0] = address(firstHook);
+        hooks[1] = address(secondHook);
+        hooks[2] = address(thirdHook);
+
+        adapter.registerHooks(testPoolKey, hooks);
+
+        // Start recording logs to capture events
+        vm.recordLogs();
+
+        // Impersonate the pool manager
+        address poolManagerAddress = address(adapter.poolManager());
+        vm.prank(poolManagerAddress);
+
+        // Call beforeInitialize as the pool manager
+        bytes4 result = adapter.beforeInitialize(sender, testPoolKey, sqrtPriceX96);
+
+        // Get recorded logs
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Filter logs for BeforeInitializeCalled events
+        bytes32 eventSignature = keccak256("BeforeInitializeCalled(address,bytes32,uint160)");
+
+        // Arrays to track which hooks were called and in what order
+        address[] memory calledHooks = new address[](3);
+        uint256 calledCount = 0;
+
+        // Process logs to extract hook call order
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == eventSignature) {
+                // This is a BeforeInitializeCalled event
+                address emitter = logs[i].emitter;
+
+                // Add to our tracking array
+                if (calledCount < 3) {
+                    calledHooks[calledCount] = emitter;
+                    calledCount++;
+                }
+            }
+        }
+
+        // Verify all hooks were called
+        assertEq(calledCount, 3, "All three hooks should have been called");
+
+        // Verify hooks were called in the correct order
+        assertEq(calledHooks[0], address(firstHook), "First hook should be called first");
+        assertEq(calledHooks[1], address(secondHook), "Second hook should be called second");
+        assertEq(calledHooks[2], address(thirdHook), "Third hook should be called third");
+
+        // Verify the result
+        assertEq(result, IHooks.beforeInitialize.selector, "Should return beforeInitialize selector");
+    }
+
+    function test_BeforeInitialize_MixedExecutionOrder() public {
+        // Setup
+        address sender = address(0x123);
+        PoolKey memory testPoolKey = PoolKey({
+            currency0: Currency.wrap(address(0)),
+            currency1: Currency.wrap(address(1)),
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: IHooks(address(adapter))
+        });
+        uint160 sqrtPriceX96 = SQRT_PRICE_1_1;
+
+        // Deploy hooks with different flags - simplify by reusing existing hooks
+        address[] memory hooks = new address[](5);
+        hooks[0] = address(beforeInitializeHook); // Has BEFORE_INITIALIZE_FLAG
+        hooks[1] = address(afterInitializeHook); // Has AFTER_INITIALIZE_FLAG
+        hooks[2] = address(beforeSwapHook); // Has BEFORE_SWAP_FLAG
+        hooks[3] = address(beforeDonateHook); // Has BEFORE_DONATE_FLAG
+
+        // deploy another hook with BEFORE_INITIALIZE_FLAG at a different address
+        address hookAddress = address(uint160(0x200 | Hooks.BEFORE_INITIALIZE_FLAG));
+        deployCodeTo("HookWithEvents.sol", "", hookAddress);
+        hooks[4] = address(HookWithEvents(hookAddress));
+
+        // Register hooks in a specific order
+        adapter.registerHooks(testPoolKey, hooks);
+
+        // Start recording logs to capture events
+        vm.recordLogs();
+
+        // Impersonate the pool manager
+        vm.prank(address(adapter.poolManager()));
+
+        // Call beforeInitialize as the pool manager
+        bytes4 result = adapter.beforeInitialize(sender, testPoolKey, sqrtPriceX96);
+
+        // Get recorded logs
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        // Filter logs for BeforeInitializeCalled events
+        bytes32 eventSignature = keccak256("BeforeInitializeCalled(address,bytes32,uint160)");
+
+        // Count occurrences of each hook in the logs
+        uint256 beforeInitializeCount = 0;
+        uint256 afterInitializeCount = 0;
+        uint256 beforeSwapCount = 0;
+        uint256 beforeDonateCount = 0;
+
+        // Track the order (if any hooks with BEFORE_INITIALIZE_FLAG are called)
+        address firstCalled = address(0);
+        address lastCalled = address(0);
+
+        // Process logs
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == eventSignature) {
+                address emitter = logs[i].emitter;
+
+                if (emitter == address(beforeInitializeHook)) {
+                    beforeInitializeCount++;
+                    if (firstCalled == address(0)) {
+                        firstCalled = emitter;
+                    }
+                } else if (emitter == address(afterInitializeHook)) {
+                    afterInitializeCount++;
+                } else if (emitter == address(beforeSwapHook)) {
+                    beforeSwapCount++;
+                } else if (emitter == address(beforeDonateHook)) {
+                    beforeDonateCount++;
+                } else if (emitter == hooks[4]) {
+                    beforeInitializeCount++;
+                    if (firstCalled == address(beforeInitializeHook)) {
+                        lastCalled = hooks[4];
+                    }
+                }
+            }
+        }
+
+        // Verify only the hook with BEFORE_INITIALIZE_FLAG was called
+        assertEq(beforeInitializeCount, 2, "beforeInitializeHook should be called twice");
+        assertEq(afterInitializeCount, 0, "afterInitializeHook should not be called");
+        assertEq(beforeSwapCount, 0, "beforeSwapHook should not be called");
+        assertEq(beforeDonateCount, 0, "beforeDonateHook should not be called");
+
+        // Verify the first called hook is the beforeInitializeHook
+        assertEq(firstCalled, address(beforeInitializeHook), "beforeInitializeHook should be called first");
+        assertEq(lastCalled, hooks[4], "hooks[4] should be called last");
+
+        // Verify the result
+        assertEq(result, IHooks.beforeInitialize.selector, "Should return beforeInitialize selector");
+    }
 }
 
 // Non-hook contract for testing
