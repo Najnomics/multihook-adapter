@@ -6,10 +6,10 @@ import {BeforeInitializeTest} from "./hooks/BeforeInitializeTest.sol";
 import {AfterInitializeTest} from "./hooks/AfterInitializeTest.sol";
 
 /**
- * @title MultiHookAdapterBaseTest
+ * @title RunAllTests
  * @notice Main test runner that imports all the individual test files
  */
-contract MultiHookAdapterBaseTestRunner {
+contract RunAllTests {
 // This file is intentionally left empty as it just serves as an entry point
 // for running all the tests defined in the imported files
 }
