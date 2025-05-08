@@ -99,7 +99,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     {
         PoolId poolId = key.toId();
         IHooks[] storage subHooks = _hooksByPool[poolId];
-        // Invoke beforeInitialize on each sub-hook in order:contentReference[oaicite:2]{index=2}.
+        // Invoke beforeInitialize on each sub-hook in order
         uint256 length = subHooks.length;
         for (uint256 i = 0; i < length; ++i) {
             // Only call if the sub-hook is permissioned for beforeInitialize
@@ -116,7 +116,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                 );
             }
         }
-        // Return this function's own selector to PoolManager:contentReference[oaicite:3]{index=3}.
+        // Return this function's own selector to PoolManager
         return IHooks.beforeInitialize.selector;
     }
 
@@ -204,5 +204,102 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
 
         // Return the appropriate selector based on the operation type
         return addingLiquidity ? IHooks.beforeAddLiquidity.selector : IHooks.beforeRemoveLiquidity.selector;
+    }
+
+    function _afterAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4, BalanceDelta) {
+        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
+    }
+
+    function _afterRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4, BalanceDelta) {
+        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
+    }
+
+    function _afterModifyPosition(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata data
+    ) internal returns (bytes4, BalanceDelta) {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        bool addedLiquidity = params.liquidityDelta > 0;
+        // Initialize combined balance delta to zero
+        BalanceDelta combinedDelta = BalanceDeltaLibrary.ZERO_DELTA;
+        uint256 length = subHooks.length;
+
+        for (uint256 i = 0; i < length; i++) {
+            uint160 hookPerms = uint160(address(subHooks[i]));
+            if (addedLiquidity) {
+                if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_FLAG != 0) {
+                    // If sub-hook has afterAddLiquidityReturnDelta, it returns a BalanceDelta
+                    if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
+                        (bool success, bytes memory result) = address(subHooks[i]).call(
+                            abi.encodeWithSelector(
+                                IHooks.afterAddLiquidity.selector, sender, key, params, delta, feesAccrued, data
+                            )
+                        );
+                        require(success, "Sub-hook afterAddLiquidity failed");
+                        (bytes4 sel, BalanceDelta hookDelta) = abi.decode(result, (bytes4, BalanceDelta));
+                        require(sel == IHooks.afterAddLiquidity.selector, "Invalid afterAddLiquidity return");
+                        combinedDelta = add(combinedDelta, hookDelta);
+                    } else {
+                        (bool success, bytes memory result) = address(subHooks[i]).call(
+                            abi.encodeWithSelector(IHooks.afterAddLiquidity.selector, sender, key, params, delta, data)
+                        );
+                        require(success, "Sub-hook afterAddLiquidity failed");
+                        require(
+                            result.length >= 4 && bytes4(result) == IHooks.afterAddLiquidity.selector,
+                            "Invalid afterAddLiquidity return"
+                        );
+                    }
+                }
+            } else {
+                if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_FLAG != 0) {
+                    if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
+                        (bool success, bytes memory result) = address(subHooks[i]).call(
+                            abi.encodeWithSelector(
+                                IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, data
+                            )
+                        );
+                        require(success, "Sub-hook afterRemoveLiquidity failed");
+                        (bytes4 sel, BalanceDelta hookDelta) = abi.decode(result, (bytes4, BalanceDelta));
+                        require(sel == IHooks.afterRemoveLiquidity.selector, "Invalid afterRemoveLiquidity return");
+                        combinedDelta = add(combinedDelta, hookDelta);
+                    } else {
+                        (bool success, bytes memory result) = address(subHooks[i]).call(
+                            abi.encodeWithSelector(
+                                IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, feesAccrued, data
+                            )
+                        );
+                        require(success, "Sub-hook afterRemoveLiquidity failed");
+                        require(
+                            result.length >= 4 && bytes4(result) == IHooks.afterRemoveLiquidity.selector,
+                            "Invalid afterRemoveLiquidity return"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Return the appropriate selector and combined delta based on the operation type
+        return addedLiquidity
+            ? (IHooks.afterAddLiquidity.selector, combinedDelta)
+            : (IHooks.afterRemoveLiquidity.selector, combinedDelta);
     }
 }
