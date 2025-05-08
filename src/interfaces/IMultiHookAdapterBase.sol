@@ -10,13 +10,13 @@ import {PoolId} from "v4-core/types/PoolId.sol";
 interface IMultiHookAdapterBase {
     /// @notice Thrown when a zero address is provided as a hook
     error HookAddressZero();
-    
+
     /// @notice Thrown when a hook address is invalid for the given fee tier
     error InvalidHookAddress();
-    
+
     /// @notice Thrown when trying to perform a reentrant call
     error Reentrancy();
-    
+
     /// @notice Emitted when hooks are registered for a pool
     /// @param poolId The ID of the pool for which hooks were registered
     /// @param hookAddresses The addresses of the hooks registered

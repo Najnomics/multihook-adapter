@@ -29,7 +29,7 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
     function getHooksByPool(PoolId poolId) external view returns (IHooks[] memory) {
         return _hooksByPool[poolId];
     }
-    
+
     // Must implement this method to make the contract concrete
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
@@ -49,4 +49,4 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
             afterRemoveLiquidityReturnDelta: true
         });
     }
-} 
+}

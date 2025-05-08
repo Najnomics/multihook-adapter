@@ -4,12 +4,14 @@ pragma solidity ^0.8.24;
 // Import necessary Uniswap v4 core types and interfaces
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
-import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
-import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {BalanceDelta, toBalanceDelta, BalanceDeltaLibrary, add} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {
+    BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary
+} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {IBaseHookExtension} from "../interfaces/IBaseHookExtension.sol";
 import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 
@@ -20,8 +22,8 @@ import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 
 abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     using Hooks for IHooks;
-    
-     /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.
+
+    /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.
     mapping(PoolId => IHooks[]) internal _hooksByPool;
 
     /// @dev Temporary storage for beforeSwap returns of sub-hooks, keyed by PoolId.
@@ -29,13 +31,14 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
 
     /// @dev Reentrancy lock state (1 = unlocked, 2 = locked).
     uint256 private locked = 1;
-    
+
     modifier lock() {
         if (locked != 1) revert Reentrancy();
         locked = 2;
         _;
         locked = 1;
     }
+
     constructor(IPoolManager _poolManager) BaseHook(_poolManager) {}
 
     /// @notice Registers an array of sub-hooks to be used for a given pool.
@@ -45,7 +48,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     function registerHooks(PoolKey calldata key, address[] calldata hookAddresses) external virtual override {
         _registerHooks(key, hookAddresses);
     }
-    
+
     /// @dev Internal implementation of registerHooks that can be called by inheriting contracts
     function _registerHooks(PoolKey calldata key, address[] calldata hookAddresses) internal {
         PoolId poolId = key.toId();
@@ -61,7 +64,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
             if (!hook.isValidHookAddress(key.fee)) revert InvalidHookAddress();
             hookList.push(hook);
         }
-        
+
         // Emit event when hooks are registered
         emit HooksRegistered(poolId, hookAddresses);
     }
