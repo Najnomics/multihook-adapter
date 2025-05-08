@@ -5,6 +5,7 @@ import {RegisterHooksTest} from "./hooks/RegisterHooksTest.sol";
 import {BeforeInitializeTest} from "./hooks/BeforeInitializeTest.sol";
 import {AfterInitializeTest} from "./hooks/AfterInitializeTest.sol";
 import {BeforeAddLiquidityTest} from "./hooks/BeforeAddLiquidityTest.sol";
+import {BeforeRemoveLiquidityTest} from "./hooks/BeforeRemoveLiquidityTest.sol";
 
 /**
  * @title RunAllTests

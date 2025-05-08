@@ -25,7 +25,7 @@ contract HookWithEvents is IHooks {
     event AfterDonateCalled(address sender, bytes32 poolId);
     event BeforeAddLiquidityCalled(address sender, bytes32 poolId, bytes hookData);
     event AfterAddLiquidityCalled(address sender, bytes32 poolId);
-    event BeforeRemoveLiquidityCalled(address sender, bytes32 poolId);
+    event BeforeRemoveLiquidityCalled(address sender, bytes32 poolId, bytes hookData);
     event AfterRemoveLiquidityCalled(address sender, bytes32 poolId);
 
     // Hook implementation functions
@@ -64,11 +64,13 @@ contract HookWithEvents is IHooks {
         return (IHooks.afterAddLiquidity.selector, BalanceDelta.wrap(0));
     }
 
-    function beforeRemoveLiquidity(address sender, PoolKey calldata key, ModifyLiquidityParams calldata, bytes calldata)
-        external
-        returns (bytes4)
-    {
-        emit BeforeRemoveLiquidityCalled(sender, keccak256(abi.encode(key)));
+    function beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata,
+        bytes calldata hookData
+    ) external returns (bytes4) {
+        emit BeforeRemoveLiquidityCalled(sender, keccak256(abi.encode(key)), hookData);
         return IHooks.beforeRemoveLiquidity.selector;
     }
 
