@@ -68,4 +68,78 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         // Emit event when hooks are registered
         emit HooksRegistered(poolId, hookAddresses);
     }
+
+    /// @notice Returns the hook permissions for this adapter
+    /// @return permissions The hook permissions
+    function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory permissions) {
+        return Hooks.Permissions({
+            beforeInitialize: true,
+            afterInitialize: true,
+            beforeAddLiquidity: true,
+            afterAddLiquidity: true,
+            beforeRemoveLiquidity: true,
+            afterRemoveLiquidity: true,
+            beforeSwap: true,
+            afterSwap: true,
+            beforeDonate: true,
+            afterDonate: true,
+            beforeSwapReturnDelta: true,
+            afterSwapReturnDelta: true,
+            afterAddLiquidityReturnDelta: true,
+            afterRemoveLiquidityReturnDelta: true
+        });
+    }
+
+    function _beforeInitialize(address sender, PoolKey calldata key, uint160 sqrtPriceX96)
+        internal
+        override
+        lock
+        returns (bytes4)
+    {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        // Invoke beforeInitialize on each sub-hook in order:contentReference[oaicite:2]{index=2}.
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            // Only call if the sub-hook is permissioned for beforeInitialize
+            if (uint160(address(subHooks[i])) & Hooks.BEFORE_INITIALIZE_FLAG != 0) {
+                // Call sub-hook; since beforeInitialize returns only a selector, we ignore returned data beyond selector check.
+                (bool success, bytes memory result) = address(subHooks[i]).call(
+                    abi.encodeWithSelector(IHooks.beforeInitialize.selector, sender, key, sqrtPriceX96)
+                );
+                require(success, "Sub-hook beforeInitialize failed");
+                // Verify the returned selector for correctness
+                require(
+                    result.length >= 4 && bytes4(result) == IHooks.beforeInitialize.selector,
+                    "Invalid beforeInitialize return"
+                );
+            }
+        }
+        // Return this function's own selector to PoolManager:contentReference[oaicite:3]{index=3}.
+        return IHooks.beforeInitialize.selector;
+    }
+
+    function _afterInitialize(address sender, PoolKey calldata key, uint160 sqrtPriceX96, int24 tick)
+        internal
+        override
+        lock
+        returns (bytes4)
+    {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (uint160(address(subHooks[i])) & Hooks.AFTER_INITIALIZE_FLAG != 0) {
+                (bool success, bytes memory result) = address(subHooks[i]).call(
+                    abi.encodeWithSelector(IHooks.afterInitialize.selector, sender, key, sqrtPriceX96, tick)
+                );
+                require(success, "Sub-hook afterInitialize failed");
+                require(
+                    result.length >= 4 && bytes4(result) == IHooks.afterInitialize.selector,
+                    "Invalid afterInitialize return"
+                );
+            }
+        }
+        return IHooks.afterInitialize.selector;
+    }
 }

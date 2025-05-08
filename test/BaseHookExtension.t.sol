@@ -22,7 +22,7 @@ contract BaseHookExtensionTest is Test {
 
     function setUp() public {
         adapter = new MockMultiHookAdapter();
-        hook = new MockSubHook(adapter);
+        hook = new MockSubHook(address(adapter));
         unauthorizedCaller = address(0x123);
         currency0 = Currency.wrap(address(0x1));
         currency1 = Currency.wrap(address(0x2));
