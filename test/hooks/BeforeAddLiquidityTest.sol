@@ -15,14 +15,9 @@ contract BeforeAddLiquidityTest is MultiHookAdapterBaseTest {
 
     function setUp() public override {
         super.setUp();
-        
+
         // Set up standard test parameters for liquidity modification
-        testParams = ModifyLiquidityParams({
-            tickLower: -120,
-            tickUpper: 120,
-            liquidityDelta: 1e18,
-            salt: bytes32(0)
-        });
+        testParams = ModifyLiquidityParams({tickLower: -120, tickUpper: 120, liquidityDelta: 1e18, salt: bytes32(0)});
     }
 
     function test_BeforeAddLiquidity_SingleHook() public {
@@ -315,7 +310,9 @@ contract BeforeAddLiquidityTest is MultiHookAdapterBaseTest {
 
         // Should still return the correct selector even with no hooks registered
         assertEq(
-            result, IHooks.beforeAddLiquidity.selector, "Should return beforeAddLiquidity selector with no hooks registered"
+            result,
+            IHooks.beforeAddLiquidity.selector,
+            "Should return beforeAddLiquidity selector with no hooks registered"
         );
     }
 
@@ -326,12 +323,8 @@ contract BeforeAddLiquidityTest is MultiHookAdapterBaseTest {
         bytes memory hookData = "test data";
 
         // Test with different ModifyLiquidityParams
-        ModifyLiquidityParams memory customParams = ModifyLiquidityParams({
-            tickLower: -240,
-            tickUpper: 240,
-            liquidityDelta: 2e18,
-            salt: bytes32(uint256(1))
-        });
+        ModifyLiquidityParams memory customParams =
+            ModifyLiquidityParams({tickLower: -240, tickUpper: 240, liquidityDelta: 2e18, salt: bytes32(uint256(1))});
 
         // Register a hook with BEFORE_ADD_LIQUIDITY_FLAG
         address[] memory hooks = new address[](1);
@@ -354,4 +347,4 @@ contract BeforeAddLiquidityTest is MultiHookAdapterBaseTest {
         // Verify the result
         assertEq(result, IHooks.beforeAddLiquidity.selector, "Should return beforeAddLiquidity selector");
     }
-} 
+}

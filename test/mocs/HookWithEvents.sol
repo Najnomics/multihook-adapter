@@ -42,10 +42,12 @@ contract HookWithEvents is IHooks {
         return IHooks.afterInitialize.selector;
     }
 
-    function beforeAddLiquidity(address sender, PoolKey calldata key, ModifyLiquidityParams calldata, bytes calldata hookData)
-        external
-        returns (bytes4)
-    {
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata,
+        bytes calldata hookData
+    ) external returns (bytes4) {
         emit BeforeAddLiquidityCalled(sender, keccak256(abi.encode(key)), hookData);
         return IHooks.beforeAddLiquidity.selector;
     }

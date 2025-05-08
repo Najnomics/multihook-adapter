@@ -201,7 +201,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                 }
             }
         }
-        
+
         // Return the appropriate selector based on the operation type
         return addingLiquidity ? IHooks.beforeAddLiquidity.selector : IHooks.beforeRemoveLiquidity.selector;
     }
