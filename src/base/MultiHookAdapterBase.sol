@@ -12,6 +12,7 @@ import {BalanceDelta, toBalanceDelta, BalanceDeltaLibrary, add} from "@uniswap/v
 import {
     BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary
 } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {IBaseHookExtension} from "../interfaces/IBaseHookExtension.sol";
 import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 
@@ -141,5 +142,66 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
             }
         }
         return IHooks.afterInitialize.selector;
+    }
+
+    function _beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4) {
+        return _beforeModifyPosition(sender, key, params, hookData);
+    }
+
+    function _beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4) {
+        return _beforeModifyPosition(sender, key, params, hookData);
+    }
+
+    function _beforeModifyPosition(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        bytes calldata data
+    ) internal onlyPoolManager lock returns (bytes4) {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        bool addingLiquidity = params.liquidityDelta > 0;
+
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            uint160 hookPerms = uint160(address(subHooks[i]));
+            if (addingLiquidity) {
+                // If adding liquidity, call sub-hook if it has beforeAddLiquidity permission
+                if (hookPerms & Hooks.BEFORE_ADD_LIQUIDITY_FLAG != 0) {
+                    (bool success, bytes memory result) = address(subHooks[i]).call(
+                        abi.encodeWithSelector(IHooks.beforeAddLiquidity.selector, sender, key, params, data)
+                    );
+                    require(success, "Sub-hook beforeAddLiquidity failed");
+                    require(
+                        result.length >= 4 && bytes4(result) == IHooks.beforeAddLiquidity.selector,
+                        "Invalid beforeAddLiquidity return"
+                    );
+                }
+                return IHooks.beforeAddLiquidity.selector;
+            } else {
+                // If removing liquidity, call sub-hook if it has beforeRemoveLiquidity permission
+                if (hookPerms & Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG != 0) {
+                    (bool success, bytes memory result) = address(subHooks[i]).call(
+                        abi.encodeWithSelector(IHooks.beforeRemoveLiquidity.selector, sender, key, params, data)
+                    );
+                    require(success, "Sub-hook beforeRemoveLiquidity failed");
+                    require(
+                        result.length >= 4 && bytes4(result) == IHooks.beforeRemoveLiquidity.selector,
+                        "Invalid beforeRemoveLiquidity return"
+                    );
+                }
+                return IHooks.beforeRemoveLiquidity.selector;
+            }
+        }
     }
 }
