@@ -316,7 +316,9 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
             if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_FLAG != 0) {
                 if (hookPerms & Hooks.AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, data)
+                        abi.encodeWithSelector(
+                            IHooks.afterRemoveLiquidity.selector, sender, key, params, delta, feesAccrued, data
+                        )
                     );
                     require(success, "Sub-hook afterRemoveLiquidity failed");
                     (bytes4 sel, BalanceDelta hookDelta) = abi.decode(result, (bytes4, BalanceDelta));
