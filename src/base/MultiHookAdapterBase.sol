@@ -162,6 +162,87 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         return _beforeModifyPosition(sender, key, params, hookData);
     }
 
+    function _afterAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4, BalanceDelta) {
+        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
+    }
+
+    function _afterRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        ModifyLiquidityParams calldata params,
+        BalanceDelta delta,
+        BalanceDelta feesAccrued,
+        bytes calldata hookData
+    ) internal override lock returns (bytes4, BalanceDelta) {
+        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
+    }
+
+    function _beforeSwap(
+        address sender, 
+        PoolKey calldata key, 
+        SwapParams calldata params, 
+        bytes calldata data
+    ) internal override lock returns (bytes4, BeforeSwapDelta, uint24) {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+
+        // Combined BeforeSwapDelta and LP fee override initialization
+        BeforeSwapDelta combinedHookDelta = BeforeSwapDeltaLibrary.ZERO_DELTA;
+        uint24 lpFeeOverride = 0;
+        bool feeOverrideSet = false;
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            
+            // Prepare storage for per-hook BeforeSwapDelta returns (initialize to 0 for each hook).
+            delete beforeSwapHookReturns[poolId];
+
+            if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_FLAG != 0) {
+                (bool success, bytes memory result) = address(subHooks[i]).call(
+                    abi.encodeWithSelector(IHooks.beforeSwap.selector, sender, key, params, data)
+                );
+                require(success, "Sub-hook beforeSwap failed");
+                // Determine if sub-hook returned a BeforeSwapDelta (has BEFORE_SWAP_RETURN_DELTA permission).
+                if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG != 0) {
+                    // The sub-hook should return (selector, BeforeSwapDelta, uint24):contentReference[oaicite:6]{index=6}.
+                    (bytes4 sel, BeforeSwapDelta hookDelta, uint24 hookFee) = abi.decode(result, (bytes4, BeforeSwapDelta, uint24));
+                    require(sel == IHooks.beforeSwap.selector, "Invalid beforeSwap return");
+                    // Accumulate the delta returned by this sub-hook:contentReference[oaicite:7]{index=7}.
+                    combinedHookDelta = _addBeforeSwapDelta(combinedHookDelta, hookDelta);
+                    // If the sub-hook provided an LP fee override, set or detect conflict:contentReference[oaicite:8]{index=8}.
+                    if (hookFee != 0) {
+                        require(!feeOverrideSet, "Multiple fee overrides");
+                        lpFeeOverride = hookFee;
+                        feeOverrideSet = true;
+                    }
+                    // Store this hook's BeforeSwapDelta for use in afterSwap
+                    beforeSwapHookReturns[poolId][i] = hookDelta;
+                } else {
+                    // The sub-hook returns only a selector or possibly a uint override (no delta permission).
+                    bytes4 sel = result.length >= 4 ? bytes4(result) : bytes4(0);
+                    if (sel != IHooks.beforeSwap.selector) {
+                        // Treat the return as an LP fee override if not matching expected selector:contentReference[oaicite:9]{index=9}.
+                        uint256 overrideVal = result.length == 32 ? abi.decode(result, (uint256)) : 0;
+                        uint24 hookFee = uint24(overrideVal);
+                        if (hookFee != 0) {
+                            require(!feeOverrideSet, "Multiple fee overrides");
+                            lpFeeOverride = hookFee;
+                            feeOverrideSet = true;
+                        }
+                    }
+                }
+            } 
+        }
+        // Return the aggregated BeforeSwapDelta and fee override (if any):contentReference[oaicite:10]{index=10}.
+        return (IHooks.beforeSwap.selector, combinedHookDelta, lpFeeOverride);
+    }
+
     function _beforeModifyPosition(
         address sender,
         PoolKey calldata key,
@@ -204,28 +285,6 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
 
         // Return the appropriate selector based on the operation type
         return addingLiquidity ? IHooks.beforeAddLiquidity.selector : IHooks.beforeRemoveLiquidity.selector;
-    }
-
-    function _afterAddLiquidity(
-        address sender,
-        PoolKey calldata key,
-        ModifyLiquidityParams calldata params,
-        BalanceDelta delta,
-        BalanceDelta feesAccrued,
-        bytes calldata hookData
-    ) internal override lock returns (bytes4, BalanceDelta) {
-        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
-    }
-
-    function _afterRemoveLiquidity(
-        address sender,
-        PoolKey calldata key,
-        ModifyLiquidityParams calldata params,
-        BalanceDelta delta,
-        BalanceDelta feesAccrued,
-        bytes calldata hookData
-    ) internal override lock returns (bytes4, BalanceDelta) {
-        return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
     }
 
     function _afterModifyPosition(
@@ -340,5 +399,22 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         }
 
         return combinedDelta;
+    }
+
+    function _addBeforeSwapDelta(BeforeSwapDelta a, BeforeSwapDelta b) internal pure returns (BeforeSwapDelta) {
+        BalanceDelta res = add(
+                toBalanceDelta(
+                    BeforeSwapDeltaLibrary.getSpecifiedDelta(a),
+                    BeforeSwapDeltaLibrary.getUnspecifiedDelta(a)
+                ),
+                toBalanceDelta(
+                    BeforeSwapDeltaLibrary.getSpecifiedDelta(b),
+                    BeforeSwapDeltaLibrary.getUnspecifiedDelta(b)
+                )
+            );
+        return toBeforeSwapDelta(
+            BalanceDeltaLibrary.amount0(res),
+            BalanceDeltaLibrary.amount1(res)
+        );
     }
 }
