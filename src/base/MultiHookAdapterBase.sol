@@ -40,6 +40,16 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         PoolId poolId;
     }
 
+    // Context struct to solve stack too deep issue for afterSwap
+    struct AfterSwapContext {
+        address sender;
+        PoolKey key;
+        SwapParams params;
+        BalanceDelta swapDelta;
+        bytes data;
+        PoolId poolId;
+    }
+
     /// @dev Reentrancy lock state (1 = unlocked, 2 = locked).
     uint256 private locked = 1;
 
@@ -274,20 +284,35 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         BalanceDelta swapDelta,
         bytes calldata data
     ) internal override lock returns (bytes4, int128) {
-        PoolId poolId = key.toId();
-        IHooks[] storage subHooks = _hooksByPool[poolId];
-        // The PoolManager passes the aggregated BeforeSwapDelta back via beforeSwapReturn:contentReference[oaicite:11]{index=11}.
-        // Retrieve stored individual hook deltas from beforeSwap.
-        BeforeSwapDelta[] storage storedDeltas = beforeSwapHookReturns[poolId];
+        /// @dev mitigation against a stack too deep error
+        AfterSwapContext memory context = AfterSwapContext({
+            sender: sender,
+            key: key,
+            params: params,
+            swapDelta: swapDelta,
+            data: data,
+            poolId: key.toId()
+        });
+
+        IHooks[] storage subHooks = _hooksByPool[context.poolId];
+        // The PoolManager passes the aggregated BeforeSwapDelta back via beforeSwapReturn
+        // Retrieve stored individual hook deltas from beforeSwap
+        BeforeSwapDelta[] storage storedDeltas = beforeSwapHookReturns[context.poolId];
         int128 combinedAfterDelta = 0;
         uint256 length = subHooks.length;
         for (uint256 i = 0; i < length; ++i) {
             if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_FLAG != 0) {
                 if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG != 0) {
-                    // Call the extended afterSwap (with beforeSwapReturn param) expecting a BalanceDelta result.
+                    // Call the extended afterSwap (with beforeSwapReturn param) expecting a BalanceDelta result
                     (bool success, bytes memory result) = address(subHooks[i]).call(
                         abi.encodeWithSelector(
-                            IHooks.afterSwap.selector, sender, key, params, swapDelta, data, (storedDeltas[i])
+                            IHooks.afterSwap.selector,
+                            context.sender,
+                            context.key,
+                            context.params,
+                            context.swapDelta,
+                            context.data,
+                            storedDeltas[i]
                         )
                     );
                     require(success, "Sub-hook afterSwap failed");
@@ -295,20 +320,28 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     require(sel == IHooks.afterSwap.selector, "Invalid afterSwap return");
                     combinedAfterDelta += hookDelta;
                 } else {
-                    // Call the base afterSwap (no BeforeSwapDelta param) which returns only a selector.
+                    // Call the base afterSwap (no BeforeSwapDelta param) which returns only a selector
                     (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(IHooks.afterSwap.selector, sender, key, params, swapDelta, data)
+                        abi.encodeWithSelector(
+                            IHooks.afterSwap.selector,
+                            context.sender,
+                            context.key,
+                            context.params,
+                            context.swapDelta,
+                            context.data
+                        )
                     );
                     require(success, "Sub-hook afterSwap failed");
                     require(
-                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, "Invalid afterSwap return"
+                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector,
+                        "Invalid afterSwap return"
                     );
                 }
             }
         }
-        // Clear the stored beforeSwapHookReturns to avoid stale data.
-        delete beforeSwapHookReturns[poolId];
-        // Return the aggregated BalanceDelta from afterSwap hooks:contentReference[oaicite:12]{index=12}.
+        // Clear the stored beforeSwapHookReturns to avoid stale data
+        delete beforeSwapHookReturns[context.poolId];
+        // Return the aggregated BalanceDelta from afterSwap hooks
         return (IHooks.afterSwap.selector, combinedAfterDelta);
     }
 
