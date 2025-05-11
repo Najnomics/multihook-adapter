@@ -38,6 +38,17 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
         return beforeSwapHookReturns[poolId];
     }
 
+    // Set beforeSwapHookReturns for testing
+    function setBeforeSwapHookReturns(PoolId poolId, BeforeSwapDelta[] memory deltas) external {
+        // Clear any existing entries
+        delete beforeSwapHookReturns[poolId];
+
+        // Add entries to the mapping
+        for (uint256 i = 0; i < deltas.length; i++) {
+            beforeSwapHookReturns[poolId].push(deltas[i]);
+        }
+    }
+
     // Must implement this method to make the contract concrete
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
