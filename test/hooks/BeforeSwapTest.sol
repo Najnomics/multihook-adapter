@@ -7,8 +7,8 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {HookWithEvents} from "../mocs/HookWithEvents.sol";
-import {BeforeSwapHook} from "../mocs/BeforeSwapHook.sol";
+import {HookWithEvents} from "../mocks/HookWithEvents.sol";
+import {BeforeSwapHook} from "../mocks/BeforeSwapHook.sol";
 import {
     BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary
 } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";

@@ -6,7 +6,7 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {HookWithEvents} from "../mocs/HookWithEvents.sol";
+import {HookWithEvents} from "../mocks/HookWithEvents.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 contract BeforeRemoveLiquidityTest is MultiHookAdapterBaseTest {

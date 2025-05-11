@@ -10,8 +10,8 @@ import {BalanceDelta, toBalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
-import {MockMultiHookAdapter} from "./mocs/MockMultiHookAdapter.sol";
-import {MockSubHook} from "./mocs/MockSubHook.sol";
+import {MockMultiHookAdapter} from "./mocks/MockMultiHookAdapter.sol";
+import {MockSubHook} from "./mocks/MockSubHook.sol";
 
 contract BaseHookExtensionTest is Test {
     MockMultiHookAdapter public adapter;

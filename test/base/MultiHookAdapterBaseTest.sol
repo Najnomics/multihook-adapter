@@ -3,14 +3,14 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {MultiHooksAdapterBase} from "../../src/base/MultiHookAdapterBase.sol";
-import {TestMultiHookAdapter} from "../mocs/TestMultiHookAdapter.sol";
+import {TestMultiHookAdapter} from "../mocks/TestMultiHookAdapter.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
-import {HookWithEvents} from "../mocs/HookWithEvents.sol";
+import {HookWithEvents} from "../mocks/HookWithEvents.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import "forge-std/console.sol";
