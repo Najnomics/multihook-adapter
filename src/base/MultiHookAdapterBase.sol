@@ -24,8 +24,8 @@ import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 
 abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
     using Hooks for IHooks;
-    
-     /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.
+
+    /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.
     mapping(PoolId => IHooks[]) internal _hooksByPool;
 
     /// @dev Temporary storage for beforeSwap returns of sub-hooks, keyed by PoolId.
@@ -145,7 +145,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     abi.encodeWithSelector(IHooks.afterInitialize.selector, sender, key, sqrtPriceX96, tick)
                 );
                 require(success, "Sub-hook afterInitialize failed");
-        require(
+                require(
                     result.length >= 4 && bytes4(result) == IHooks.afterInitialize.selector,
                     "Invalid afterInitialize return"
                 );
@@ -194,60 +194,57 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         return _afterModifyPosition(sender, key, params, delta, feesAccrued, hookData);
     }
 
-    function _beforeSwap(
-        address sender, 
-        PoolKey calldata key, 
-        SwapParams calldata params, 
-        bytes calldata data
-    ) internal override lock returns (bytes4, BeforeSwapDelta, uint24) {
+    function _beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata data)
+        internal
+        override
+        lock
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
         PoolId poolId = key.toId();
 
         /// @dev mitigation against a stack too deep error
-        BeforeSwapContext memory context = BeforeSwapContext({
-            sender: sender,
-            key: key,
-            params: params,
-            data: data,
-            poolId: poolId
-        });
-        
+        BeforeSwapContext memory context =
+            BeforeSwapContext({sender: sender, key: key, params: params, data: data, poolId: poolId});
+
         // Clear any previous hook returns for this pool
         delete beforeSwapHookReturns[poolId];
-        
+
         // Get hook list
         IHooks[] storage subHooks = _hooksByPool[poolId];
-        
+
         // Process hooks and aggregate results
         BeforeSwapDelta combinedDelta = BeforeSwapDeltaLibrary.ZERO_DELTA;
         uint24 lpFeeOverride = LPFeeLibrary.OVERRIDE_FEE_FLAG;
-        
+
         uint256 length = subHooks.length;
-        
+
         // Initialize the array with the correct length
         beforeSwapHookReturns[poolId] = new BeforeSwapDelta[](length);
-        
+
         for (uint256 i = 0; i < length; ++i) {
             // Skip hooks without the BEFORE_SWAP_FLAG
             if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_FLAG == 0) continue;
-            
+
             // Call the hook
             (bool success, bytes memory result) = address(subHooks[i]).call(
-                abi.encodeWithSelector(IHooks.beforeSwap.selector, context.sender, context.key, context.params, context.data)
+                abi.encodeWithSelector(
+                    IHooks.beforeSwap.selector, context.sender, context.key, context.params, context.data
+                )
             );
             require(success, "Sub-hook beforeSwap failed");
-            
+
             // Process result based on hook permissions
             if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG != 0) {
                 // Process with delta returns
                 (bytes4 sel, BeforeSwapDelta delta, uint24 fee) = abi.decode(result, (bytes4, BeforeSwapDelta, uint24));
                 require(sel == IHooks.beforeSwap.selector, "Invalid beforeSwap return");
-                
+
                 // Save delta for later use
                 beforeSwapHookReturns[poolId][i] = delta;
-                
+
                 // Add to combined delta
                 combinedDelta = _addBeforeSwapDelta(combinedDelta, delta);
-                
+
                 // Handle fee override
                 if (fee != LPFeeLibrary.OVERRIDE_FEE_FLAG) {
                     lpFeeOverride = fee;
@@ -259,32 +256,23 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     // Try to extract fee override
                     uint256 overrideVal = result.length == 32 ? abi.decode(result, (uint256)) : 0;
                     uint24 hookFee = uint24(overrideVal);
-                    
+
                     if (hookFee != LPFeeLibrary.OVERRIDE_FEE_FLAG) {
                         lpFeeOverride = hookFee;
                     }
                 }
             }
         }
-        
+
         return (IHooks.beforeSwap.selector, combinedDelta, lpFeeOverride);
     }
 
     function _addBeforeSwapDelta(BeforeSwapDelta a, BeforeSwapDelta b) internal pure returns (BeforeSwapDelta) {
         BalanceDelta res = add(
-                toBalanceDelta(
-                    BeforeSwapDeltaLibrary.getSpecifiedDelta(a),
-                    BeforeSwapDeltaLibrary.getUnspecifiedDelta(a)
-                ),
-                toBalanceDelta(
-                    BeforeSwapDeltaLibrary.getSpecifiedDelta(b),
-                    BeforeSwapDeltaLibrary.getUnspecifiedDelta(b)
-                )
-            );
-        return toBeforeSwapDelta(
-            BalanceDeltaLibrary.amount0(res),
-            BalanceDeltaLibrary.amount1(res)
+            toBalanceDelta(BeforeSwapDeltaLibrary.getSpecifiedDelta(a), BeforeSwapDeltaLibrary.getUnspecifiedDelta(a)),
+            toBalanceDelta(BeforeSwapDeltaLibrary.getSpecifiedDelta(b), BeforeSwapDeltaLibrary.getUnspecifiedDelta(b))
         );
+        return toBeforeSwapDelta(BalanceDeltaLibrary.amount0(res), BalanceDeltaLibrary.amount1(res));
     }
 
     function _beforeModifyPosition(
@@ -445,4 +433,3 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         return combinedDelta;
     }
 }
-

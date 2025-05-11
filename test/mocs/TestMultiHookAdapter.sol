@@ -8,6 +8,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IBaseHookExtension} from "../../src/interfaces/IBaseHookExtension.sol";
+import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 
 /// @title TestMultiHookAdapter
 /// @notice Concrete implementation of MultiHooksAdapterBase for testing
@@ -28,6 +29,13 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
     /// @return List of hooks registered for the pool
     function getHooksByPool(PoolId poolId) external view returns (IHooks[] memory) {
         return _hooksByPool[poolId];
+    }
+
+    /// @notice Expose the beforeSwapHookReturns mapping for testing
+    /// @param poolId The pool ID to get return values for
+    /// @return Array of BeforeSwapDelta values stored for the pool
+    function getBeforeSwapHookReturns(PoolId poolId) external view returns (BeforeSwapDelta[] memory) {
+        return beforeSwapHookReturns[poolId];
     }
 
     // Must implement this method to make the contract concrete
