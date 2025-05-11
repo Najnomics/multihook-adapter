@@ -333,8 +333,7 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     );
                     require(success, "Sub-hook afterSwap failed");
                     require(
-                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector,
-                        "Invalid afterSwap return"
+                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, "Invalid afterSwap return"
                     );
                 }
             }
