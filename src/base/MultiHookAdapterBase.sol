@@ -267,6 +267,51 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         return (IHooks.beforeSwap.selector, combinedDelta, lpFeeOverride);
     }
 
+    function _afterSwap(
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        BalanceDelta swapDelta,
+        bytes calldata data
+    ) internal override lock returns (bytes4, int128) {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        // The PoolManager passes the aggregated BeforeSwapDelta back via beforeSwapReturn:contentReference[oaicite:11]{index=11}.
+        // Retrieve stored individual hook deltas from beforeSwap.
+        BeforeSwapDelta[] storage storedDeltas = beforeSwapHookReturns[poolId];
+        int128 combinedAfterDelta = 0;
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_FLAG != 0) {
+                if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG != 0) {
+                    // Call the extended afterSwap (with beforeSwapReturn param) expecting a BalanceDelta result.
+                    (bool success, bytes memory result) = address(subHooks[i]).call(
+                        abi.encodeWithSelector(
+                            IHooks.afterSwap.selector, sender, key, params, swapDelta, data, (storedDeltas[i])
+                        )
+                    );
+                    require(success, "Sub-hook afterSwap failed");
+                    (bytes4 sel, int128 hookDelta) = abi.decode(result, (bytes4, int128));
+                    require(sel == IHooks.afterSwap.selector, "Invalid afterSwap return");
+                    combinedAfterDelta += hookDelta;
+                } else {
+                    // Call the base afterSwap (no BeforeSwapDelta param) which returns only a selector.
+                    (bool success, bytes memory result) = address(subHooks[i]).call(
+                        abi.encodeWithSelector(IHooks.afterSwap.selector, sender, key, params, swapDelta, data)
+                    );
+                    require(success, "Sub-hook afterSwap failed");
+                    require(
+                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, "Invalid afterSwap return"
+                    );
+                }
+            }
+        }
+        // Clear the stored beforeSwapHookReturns to avoid stale data.
+        delete beforeSwapHookReturns[poolId];
+        // Return the aggregated BalanceDelta from afterSwap hooks:contentReference[oaicite:12]{index=12}.
+        return (IHooks.afterSwap.selector, combinedAfterDelta);
+    }
+
     function _addBeforeSwapDelta(BeforeSwapDelta a, BeforeSwapDelta b) internal pure returns (BeforeSwapDelta) {
         BalanceDelta res = add(
             toBalanceDelta(BeforeSwapDeltaLibrary.getSpecifiedDelta(a), BeforeSwapDeltaLibrary.getUnspecifiedDelta(a)),
