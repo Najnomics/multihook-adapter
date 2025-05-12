@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {MultiHooksAdapterBase} from "../../src/base/MultiHookAdapterBase.sol";
+import {MultiHookAdapterBase} from "../../src/base/MultiHookAdapterBase.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -13,11 +13,11 @@ import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/Pool
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 
 /// @title TestMultiHookAdapter
-/// @notice Concrete implementation of MultiHooksAdapterBase for testing
-contract TestMultiHookAdapter is MultiHooksAdapterBase {
+/// @notice Concrete implementation of MultiHookAdapterBase for testing
+contract TestMultiHookAdapter is MultiHookAdapterBase {
     using PoolIdLibrary for PoolKey;
 
-    constructor(IPoolManager _poolManager) MultiHooksAdapterBase(_poolManager) {}
+    constructor(IPoolManager _poolManager) MultiHookAdapterBase(_poolManager) {}
 
     /// @notice Implement registerHooks to make this class concrete
     /// @param key The PoolKey identifying the pool for which to register hooks

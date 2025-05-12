@@ -17,12 +17,12 @@ import {IBaseHookExtension} from "../interfaces/IBaseHookExtension.sol";
 import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 
-/// @title MultiHooksAdapterBase
+/// @title MultiHookAdapterBase
 /// @notice Adapter contract that allows multiple hook contracts to be attached to a Uniswap V4 pool.
 /// @dev It implements the IHooks interface and delegates each callback to a set of sub-hooks registered per pool, in order.
 /// @dev Would be inherited by child contracts to place restrictions on hooks mutability
 
-abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
+abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
     using Hooks for IHooks;
 
     /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.

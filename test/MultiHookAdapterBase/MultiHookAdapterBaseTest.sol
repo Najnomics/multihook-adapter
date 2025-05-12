@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {MultiHooksAdapterBase} from "../../src/base/MultiHookAdapterBase.sol";
+import {MultiHookAdapterBase} from "../../src/base/MultiHookAdapterBase.sol";
 import {TestMultiHookAdapter} from "../mocks/TestMultiHookAdapter.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
