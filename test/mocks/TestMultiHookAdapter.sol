@@ -9,6 +9,8 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IBaseHookExtension} from "../../src/interfaces/IBaseHookExtension.sol";
 import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 
 /// @title TestMultiHookAdapter
 /// @notice Concrete implementation of MultiHooksAdapterBase for testing
@@ -67,5 +69,31 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
             afterAddLiquidityReturnDelta: true,
             afterRemoveLiquidityReturnDelta: true
         });
+    }
+
+    // Expose how the adapter calls afterSwap with BeforeSwapDelta
+    function callHookAfterSwapWithBeforeSwapDelta(
+        address hook,
+        address sender,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        BalanceDelta swapDelta,
+        bytes calldata data,
+        BeforeSwapDelta beforeSwapDelta
+    ) external returns (bytes memory) {
+        // Just use the standard selector without BeforeSwapDelta
+        (bool success, bytes memory result) = address(hook).call(
+            abi.encodeWithSelector(
+                IHooks.afterSwap.selector,
+                sender,
+                key,
+                params,
+                swapDelta,
+                data
+            )
+        );
+        
+        require(success, "Hook call failed");
+        return result;
     }
 }

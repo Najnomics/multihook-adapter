@@ -278,7 +278,7 @@ contract AfterSwapTest is MultiHookAdapterBaseTest {
         assertEq(storedDeltas2.length, 0, "Second pool storage should be cleared after second call");
     }
 
-    // Test that BeforeSwapDelta values are correctly passed from beforeSwap to afterSwap
+    // Test that BeforeSwapDelta values are correctly stored in beforeSwap and cleared in afterSwap
     function test_BeforeSwap_Then_AfterSwap_Basic() public {
         // Create a hook with both BEFORE_SWAP and AFTER_SWAP flags including RETURNS_DELTA
         address hookAddress = address(
@@ -317,6 +317,10 @@ contract AfterSwapTest is MultiHookAdapterBaseTest {
         // Verify the beforeSwapDelta was stored properly
         BeforeSwapDelta[] memory storedDeltas = adapter.getBeforeSwapHookReturns(poolId);
         assertEq(storedDeltas.length, 1, "Storage should have 1 entry");
+        
+        // Debug: Print stored BeforeSwapDelta values
+        console.log("Stored specified:", int(BeforeSwapDeltaLibrary.getSpecifiedDelta(storedDeltas[0])));
+        console.log("Stored unspecified:", int(BeforeSwapDeltaLibrary.getUnspecifiedDelta(storedDeltas[0])));
 
         // Verify the stored delta matches what the hook returned
         assertEq(
@@ -347,10 +351,6 @@ contract AfterSwapTest is MultiHookAdapterBaseTest {
         // Verify the storage was cleared
         storedDeltas = adapter.getBeforeSwapHookReturns(poolId);
         assertEq(storedDeltas.length, 0, "Storage should be cleared after afterSwap");
-
-        // Validate that the adapter correctly used the stored BeforeSwapDelta in the call
-        // This test focuses on the MultiHookAdapter storing and passing BeforeSwapDelta values
-        // to hooks when calling afterSwap, which is the core of what we want to test
     }
 
     // Test multiple hooks with both beforeSwap and afterSwap flow

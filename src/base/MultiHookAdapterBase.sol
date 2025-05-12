@@ -294,54 +294,56 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
             poolId: key.toId()
         });
 
+        // Get hooks
         IHooks[] storage subHooks = _hooksByPool[context.poolId];
-        // The PoolManager passes the aggregated BeforeSwapDelta back via beforeSwapReturn
-        // Retrieve stored individual hook deltas from beforeSwap
-        BeforeSwapDelta[] storage storedDeltas = beforeSwapHookReturns[context.poolId];
-        int128 combinedAfterDelta = 0;
+        
+        // Clear any stored beforeSwapHookReturns to avoid stale data
+        delete beforeSwapHookReturns[context.poolId];
+        
+        // Combined result value
+        int128 combinedDelta = 0;
+        
+        // Process each hook
         uint256 length = subHooks.length;
         for (uint256 i = 0; i < length; ++i) {
-            if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_FLAG != 0) {
-                if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG != 0) {
-                    // Call the extended afterSwap (with beforeSwapReturn param) expecting a BalanceDelta result
-                    (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(
-                            IHooks.afterSwap.selector,
-                            context.sender,
-                            context.key,
-                            context.params,
-                            context.swapDelta,
-                            context.data,
-                            storedDeltas[i]
-                        )
-                    );
-                    require(success, "Sub-hook afterSwap failed");
-                    (bytes4 sel, int128 hookDelta) = abi.decode(result, (bytes4, int128));
-                    require(sel == IHooks.afterSwap.selector, "Invalid afterSwap return");
-                    combinedAfterDelta += hookDelta;
-                } else {
-                    // Call the base afterSwap (no BeforeSwapDelta param) which returns only a selector
-                    (bool success, bytes memory result) = address(subHooks[i]).call(
-                        abi.encodeWithSelector(
-                            IHooks.afterSwap.selector,
-                            context.sender,
-                            context.key,
-                            context.params,
-                            context.swapDelta,
-                            context.data
-                        )
-                    );
-                    require(success, "Sub-hook afterSwap failed");
-                    require(
-                        result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, "Invalid afterSwap return"
-                    );
-                }
+            // Skip hooks without AFTER_SWAP_FLAG
+            if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_FLAG == 0) continue;
+            
+            // Get hook address and flags for clarity
+            address hookAddr = address(subHooks[i]);
+            bool hasReturnsDeltaFlag = uint160(hookAddr) & Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG != 0;
+            
+            // Call the hook with standard selector
+            (bool success, bytes memory result) = address(subHooks[i]).call(
+                abi.encodeWithSelector(
+                    IHooks.afterSwap.selector,
+                    context.sender,
+                    context.key,
+                    context.params,
+                    context.swapDelta,
+                    context.data
+                )
+            );
+            
+            require(success, "Sub-hook afterSwap failed");
+            
+            if (hasReturnsDeltaFlag) {
+                // Extract the response
+                (bytes4 sel, int128 hookAfterDelta) = abi.decode(result, (bytes4, int128));
+                require(sel == IHooks.afterSwap.selector, "Invalid afterSwap return");
+                
+                // Add to the unspecified delta
+                combinedDelta += hookAfterDelta;
+            } else {
+                require(
+                    result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, 
+                    "Invalid afterSwap return"
+                );
             }
         }
-        // Clear the stored beforeSwapHookReturns to avoid stale data
-        delete beforeSwapHookReturns[context.poolId];
-        // Return the aggregated BalanceDelta from afterSwap hooks
-        return (IHooks.afterSwap.selector, combinedAfterDelta);
+        
+        // Return the unspecified delta
+        return (IHooks.afterSwap.selector, combinedDelta);
     }
 
     function _addBeforeSwapDelta(BeforeSwapDelta a, BeforeSwapDelta b) internal pure returns (BeforeSwapDelta) {
