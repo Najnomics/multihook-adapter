@@ -343,6 +343,53 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
         return (IHooks.afterSwap.selector, combinedDelta);
     }
 
+    function _beforeDonate(address sender, PoolKey calldata key, uint256 amount0, uint256 amount1, bytes calldata data)
+        internal
+        override
+        onlyPoolManager
+        lock
+        returns (bytes4)
+    {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (uint160(address(subHooks[i])) & Hooks.BEFORE_DONATE_FLAG != 0) {
+                (bool success, bytes memory result) = address(subHooks[i]).call(
+                    abi.encodeWithSelector(IHooks.beforeDonate.selector, sender, key, amount0, amount1, data)
+                );
+                require(success, "Sub-hook beforeDonate failed");
+                require(
+                    result.length >= 4 && bytes4(result) == IHooks.beforeDonate.selector, "Invalid beforeDonate return"
+                );
+            }
+        }
+        return IHooks.beforeDonate.selector;
+    }
+
+    function _afterDonate(address sender, PoolKey calldata key, uint256 amount0, uint256 amount1, bytes calldata data)
+        internal
+        override
+        lock
+        returns (bytes4)
+    {
+        PoolId poolId = key.toId();
+        IHooks[] storage subHooks = _hooksByPool[poolId];
+        uint256 length = subHooks.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (uint160(address(subHooks[i])) & Hooks.AFTER_DONATE_FLAG != 0) {
+                (bool success, bytes memory result) = address(subHooks[i]).call(
+                    abi.encodeWithSelector(IHooks.afterDonate.selector, sender, key, amount0, amount1, data)
+                );
+                require(success, "Sub-hook afterDonate failed");
+                require(
+                    result.length >= 4 && bytes4(result) == IHooks.afterDonate.selector, "Invalid afterDonate return"
+                );
+            }
+        }
+        return IHooks.afterDonate.selector;
+    }
+
     function _addBeforeSwapDelta(BeforeSwapDelta a, BeforeSwapDelta b) internal pure returns (BeforeSwapDelta) {
         BalanceDelta res = add(
             toBalanceDelta(BeforeSwapDeltaLibrary.getSpecifiedDelta(a), BeforeSwapDeltaLibrary.getUnspecifiedDelta(a)),
