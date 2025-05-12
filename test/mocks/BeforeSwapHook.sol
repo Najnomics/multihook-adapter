@@ -71,9 +71,6 @@ contract BeforeSwapHook is IHooks {
                 }
             }
         }
-
-        // This line is unreachable but needed to satisfy the compiler
-        return (IHooks.beforeSwap.selector, _customDelta, _customFee);
     }
 
     // Empty implementations for other required methods

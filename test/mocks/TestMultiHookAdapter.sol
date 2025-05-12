@@ -79,7 +79,7 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
         SwapParams calldata params,
         BalanceDelta swapDelta,
         bytes calldata data,
-        BeforeSwapDelta beforeSwapDelta
+        BeforeSwapDelta
     ) external returns (bytes memory) {
         // Just use the standard selector without BeforeSwapDelta
         (bool success, bytes memory result) =
