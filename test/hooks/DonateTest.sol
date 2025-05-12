@@ -80,7 +80,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
         // Verify the hook was called
         assertTrue(testDonateHook.wasCalled(), "Hook was not called");
         assertTrue(testDonateHook.beforeDonateCalled(), "beforeDonate was not called");
-        
+
         // Verify the parameters were correctly passed
         assertEq(testDonateHook.lastSender(), sender, "Incorrect sender");
         assertEq(testDonateHook.lastAmount0(), testAmount0, "Incorrect amount0");
@@ -107,7 +107,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
         // Verify the hook was called
         assertTrue(testDonateHook.wasCalled(), "Hook was not called");
         assertTrue(testDonateHook.afterDonateCalled(), "afterDonate was not called");
-        
+
         // Verify the parameters were correctly passed
         assertEq(testDonateHook.lastSender(), sender, "Incorrect sender");
         assertEq(testDonateHook.lastAmount0(), testAmount0, "Incorrect amount0");
@@ -137,13 +137,13 @@ contract DonateTest is MultiHookAdapterBaseTest {
         assertTrue(testDonateHook.beforeDonateCalled(), "beforeDonate was not called on first hook");
         assertTrue(testSecondDonateHook.wasCalled(), "Second hook was not called");
         assertTrue(testSecondDonateHook.beforeDonateCalled(), "beforeDonate was not called on second hook");
-        
+
         // Verify the parameters were correctly passed to both hooks
         assertEq(testDonateHook.lastSender(), sender, "Incorrect sender for first hook");
         assertEq(testDonateHook.lastAmount0(), testAmount0, "Incorrect amount0 for first hook");
         assertEq(testDonateHook.lastAmount1(), testAmount1, "Incorrect amount1 for first hook");
         assertEq(testDonateHook.lastData(), hookData, "Incorrect data for first hook");
-        
+
         assertEq(testSecondDonateHook.lastSender(), sender, "Incorrect sender for second hook");
         assertEq(testSecondDonateHook.lastAmount0(), testAmount0, "Incorrect amount0 for second hook");
         assertEq(testSecondDonateHook.lastAmount1(), testAmount1, "Incorrect amount1 for second hook");
@@ -172,13 +172,13 @@ contract DonateTest is MultiHookAdapterBaseTest {
         assertTrue(testDonateHook.afterDonateCalled(), "afterDonate was not called on first hook");
         assertTrue(testSecondDonateHook.wasCalled(), "Second hook was not called");
         assertTrue(testSecondDonateHook.afterDonateCalled(), "afterDonate was not called on second hook");
-        
+
         // Verify the parameters were correctly passed to both hooks
         assertEq(testDonateHook.lastSender(), sender, "Incorrect sender for first hook");
         assertEq(testDonateHook.lastAmount0(), testAmount0, "Incorrect amount0 for first hook");
         assertEq(testDonateHook.lastAmount1(), testAmount1, "Incorrect amount1 for first hook");
         assertEq(testDonateHook.lastData(), hookData, "Incorrect data for first hook");
-        
+
         assertEq(testSecondDonateHook.lastSender(), sender, "Incorrect sender for second hook");
         assertEq(testSecondDonateHook.lastAmount0(), testAmount0, "Incorrect amount0 for second hook");
         assertEq(testSecondDonateHook.lastAmount1(), testAmount1, "Incorrect amount1 for second hook");
@@ -203,7 +203,9 @@ contract DonateTest is MultiHookAdapterBaseTest {
         assertTrue(testBeforeDonateOnlyHook.wasCalled(), "Before-only hook was not called");
         assertTrue(testBeforeDonateOnlyHook.beforeDonateCalled(), "beforeDonate was not called on before-only hook");
         assertFalse(testAfterDonateOnlyHook.wasCalled(), "After-only hook should not be called during beforeDonate");
-        assertFalse(testAfterDonateOnlyHook.beforeDonateCalled(), "beforeDonate should not be called on after-only hook");
+        assertFalse(
+            testAfterDonateOnlyHook.beforeDonateCalled(), "beforeDonate should not be called on after-only hook"
+        );
 
         // Reset the hooks
         testBeforeDonateOnlyHook.resetCalled();
@@ -211,13 +213,15 @@ contract DonateTest is MultiHookAdapterBaseTest {
 
         // Impersonate pool manager again for afterDonate call
         impersonatePoolManager();
-        
+
         // Call afterDonate
         adapter.afterDonate(sender, testPoolKey, testAmount0, testAmount1, hookData);
 
         // Verify only the afterDonate hook was called
         assertFalse(testBeforeDonateOnlyHook.wasCalled(), "Before-only hook should not be called during afterDonate");
-        assertFalse(testBeforeDonateOnlyHook.afterDonateCalled(), "afterDonate should not be called on before-only hook");
+        assertFalse(
+            testBeforeDonateOnlyHook.afterDonateCalled(), "afterDonate should not be called on before-only hook"
+        );
         assertTrue(testAfterDonateOnlyHook.wasCalled(), "After-only hook was not called");
         assertTrue(testAfterDonateOnlyHook.afterDonateCalled(), "afterDonate was not called on after-only hook");
     }
@@ -259,7 +263,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
 
         // Impersonate pool manager again for second beforeDonate call
         impersonatePoolManager();
-        
+
         // Call beforeDonate on second pool
         adapter.beforeDonate(sender, secondPoolKey, testAmount0, testAmount1, hookData);
 
@@ -274,7 +278,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
 
         // Impersonate pool manager again for first afterDonate call
         impersonatePoolManager();
-        
+
         // Similar tests for afterDonate
         adapter.afterDonate(sender, testPoolKey, testAmount0, testAmount1, hookData);
         assertTrue(testDonateHook.wasCalled(), "First hook was not called");
@@ -286,7 +290,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
 
         // Impersonate pool manager again for second afterDonate call
         impersonatePoolManager();
-        
+
         adapter.afterDonate(sender, secondPoolKey, testAmount0, testAmount1, hookData);
         assertFalse(testDonateHook.wasCalled(), "First hook should not be called for second pool");
         assertTrue(testSecondDonateHook.wasCalled(), "Second hook was not called");
@@ -313,7 +317,7 @@ contract DonateTest is MultiHookAdapterBaseTest {
 
         // Impersonate pool manager again for afterDonate call
         impersonatePoolManager();
-        
+
         // Call afterDonate
         bytes4 afterSelector = adapter.afterDonate(sender, testPoolKey, testAmount0, testAmount1, hookData);
         assertEq(afterSelector, IHooks.afterDonate.selector, "Incorrect selector returned from afterDonate");
@@ -409,4 +413,4 @@ contract DonateTest is MultiHookAdapterBaseTest {
         assertTrue(testDonateHook.afterDonateCalled(), "afterDonate was not called");
         assertEq(testDonateHook.lastData(), emptyData, "Incorrect data");
     }
-} 
+}
