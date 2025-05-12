@@ -317,10 +317,10 @@ contract AfterSwapTest is MultiHookAdapterBaseTest {
         // Verify the beforeSwapDelta was stored properly
         BeforeSwapDelta[] memory storedDeltas = adapter.getBeforeSwapHookReturns(poolId);
         assertEq(storedDeltas.length, 1, "Storage should have 1 entry");
-        
+
         // Debug: Print stored BeforeSwapDelta values
-        console.log("Stored specified:", int(BeforeSwapDeltaLibrary.getSpecifiedDelta(storedDeltas[0])));
-        console.log("Stored unspecified:", int(BeforeSwapDeltaLibrary.getUnspecifiedDelta(storedDeltas[0])));
+        console.log("Stored specified:", int256(BeforeSwapDeltaLibrary.getSpecifiedDelta(storedDeltas[0])));
+        console.log("Stored unspecified:", int256(BeforeSwapDeltaLibrary.getUnspecifiedDelta(storedDeltas[0])));
 
         // Verify the stored delta matches what the hook returned
         assertEq(

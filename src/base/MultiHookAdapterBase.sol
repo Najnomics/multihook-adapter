@@ -296,23 +296,23 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
 
         // Get hooks
         IHooks[] storage subHooks = _hooksByPool[context.poolId];
-        
+
         // Clear any stored beforeSwapHookReturns to avoid stale data
         delete beforeSwapHookReturns[context.poolId];
-        
+
         // Combined result value
         int128 combinedDelta = 0;
-        
+
         // Process each hook
         uint256 length = subHooks.length;
         for (uint256 i = 0; i < length; ++i) {
             // Skip hooks without AFTER_SWAP_FLAG
             if (uint160(address(subHooks[i])) & Hooks.AFTER_SWAP_FLAG == 0) continue;
-            
+
             // Get hook address and flags for clarity
             address hookAddr = address(subHooks[i]);
             bool hasReturnsDeltaFlag = uint160(hookAddr) & Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG != 0;
-            
+
             // Call the hook with standard selector
             (bool success, bytes memory result) = address(subHooks[i]).call(
                 abi.encodeWithSelector(
@@ -324,24 +324,21 @@ abstract contract MultiHooksAdapterBase is BaseHook, IMultiHookAdapterBase {
                     context.data
                 )
             );
-            
+
             require(success, "Sub-hook afterSwap failed");
-            
+
             if (hasReturnsDeltaFlag) {
                 // Extract the response
                 (bytes4 sel, int128 hookAfterDelta) = abi.decode(result, (bytes4, int128));
                 require(sel == IHooks.afterSwap.selector, "Invalid afterSwap return");
-                
+
                 // Add to the unspecified delta
                 combinedDelta += hookAfterDelta;
             } else {
-                require(
-                    result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, 
-                    "Invalid afterSwap return"
-                );
+                require(result.length >= 4 && bytes4(result) == IHooks.afterSwap.selector, "Invalid afterSwap return");
             }
         }
-        
+
         // Return the unspecified delta
         return (IHooks.afterSwap.selector, combinedDelta);
     }

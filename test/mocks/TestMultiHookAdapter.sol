@@ -82,17 +82,9 @@ contract TestMultiHookAdapter is MultiHooksAdapterBase {
         BeforeSwapDelta beforeSwapDelta
     ) external returns (bytes memory) {
         // Just use the standard selector without BeforeSwapDelta
-        (bool success, bytes memory result) = address(hook).call(
-            abi.encodeWithSelector(
-                IHooks.afterSwap.selector,
-                sender,
-                key,
-                params,
-                swapDelta,
-                data
-            )
-        );
-        
+        (bool success, bytes memory result) =
+            address(hook).call(abi.encodeWithSelector(IHooks.afterSwap.selector, sender, key, params, swapDelta, data));
+
         require(success, "Hook call failed");
         return result;
     }
