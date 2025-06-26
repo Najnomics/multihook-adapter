@@ -98,7 +98,7 @@ contract BeforeSwapTest is MultiHookAdapterBaseTest {
             BeforeSwapDeltaLibrary.getUnspecifiedDelta(hookDelta),
             "Unspecified delta mismatch"
         );
-        assertEq(resultFee, LPFeeLibrary.OVERRIDE_FEE_FLAG, "Fee override mismatch");
+        assertEq(resultFee, 3000, "Fee should be calculated by strategy when no hooks override");
     }
 
     // Test with multiple hooks and delta aggregation
@@ -363,8 +363,8 @@ contract BeforeSwapTest is MultiHookAdapterBaseTest {
         (bytes4 selector, BeforeSwapDelta resultDelta, uint24 resultFee) =
             adapter.beforeSwap(sender, testPoolKey, testParams, hookData);
 
-        // Verify no fee override is applied
-        assertEq(resultFee, LPFeeLibrary.OVERRIDE_FEE_FLAG, "Fee should remain at OVERRIDE_FEE_FLAG");
+        // Verify no fee override is applied - should use fallback fee calculation
+        assertEq(resultFee, 3000, "Fee should be calculated by strategy when no hooks override");
     }
 
     // Test multiple hooks with fee overrides (last one should win)
@@ -393,8 +393,9 @@ contract BeforeSwapTest is MultiHookAdapterBaseTest {
         (bytes4 selector, BeforeSwapDelta resultDelta, uint24 resultFee) =
             adapter.beforeSwap(sender, testPoolKey, testParams, hookData);
 
-        // Verify that the last hook's fee override was used
-        assertEq(resultFee, fee2, "Last hook's fee override should be used");
+        // Verify that the weighted average fee was used (default method)
+        // (100*1 + 200*1) / (1+1) = 150
+        assertEq(resultFee, 150, "Weighted average fee should be used (default method)");
 
         // Log for clarity
         console.log("First hook fee:", fee1);

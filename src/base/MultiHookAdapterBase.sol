@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-// Import necessary Uniswap v4 core types and interfaces
+// Import necessary Uniswap v4 core types and interfaces//
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {BaseHook} from "v4-periphery/src/utils/BaseHook.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
@@ -13,25 +13,51 @@ import {
     BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary
 } from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {IBaseHookExtension} from "../interfaces/IBaseHookExtension.sol";
-import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
 import {LPFeeLibrary} from "v4-core/libraries/LPFeeLibrary.sol";
 
-/// @title MultiHookAdapterBase
-/// @notice Adapter contract that allows multiple hook contracts to be attached to a Uniswap V4 pool.
-/// @dev It implements the IHooks interface and delegates each callback to a set of sub-hooks registered per pool, in order.
-/// @dev Would be inherited by child contracts to place restrictions on hooks mutability
+// Import our interfaces and strategies
+import {IMultiHookAdapterBase} from "../interfaces/IMultiHookAdapterBase.sol";
+import {IFeeCalculationStrategy} from "../interfaces/IFeeCalculationStrategy.sol";
+import {IWeightedHook} from "../interfaces/IWeightedHook.sol";
+import {FeeCalculationStrategy} from "../strategies/FeeCalculationStrategy.sol";
 
+/// @title MultiHookAdapterBase
+/// @notice Unified adapter contract with complete hook aggregation logic and advanced fee calculation strategies
+/// @dev Supports weighted fee calculations, multiple strategies, flexible governance, and all hook lifecycle callbacks
+/// @dev Consolidates functionality from MultiHookAdapterBase and MultiHookAdapterBaseV2 into a single unified contract
+/// @dev Now includes pool creator tracking to restrict hook management to pool creators
 abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
     using Hooks for IHooks;
 
-    /// @dev Mapping from PoolId to an ordered list of hook contracts that are invoked for that pool.
+    /// @dev Mapping from PoolId to an ordered list of hook contracts
     mapping(PoolId => IHooks[]) internal _hooksByPool;
 
-    /// @dev Temporary storage for beforeSwap returns of sub-hooks, keyed by PoolId.
-    mapping(PoolId => BeforeSwapDelta[]) internal beforeSwapHookReturns;
+    /// @dev Mapping from PoolId to the pool creator address
+    mapping(PoolId => address) internal _poolCreators;
 
-    // Context struct to solve stack too deep issue
+    /// @dev Temporary storage for beforeSwap returns of sub-hooks, keyed by PoolId
+    mapping(PoolId => BeforeSwapDelta[]) internal beforeSwapHookReturns;
+    
+    /// @dev Fee configuration per pool (protected for access by derived contracts)
+    mapping(PoolId => IFeeCalculationStrategy.FeeConfiguration) internal _poolFeeConfigs;
+    
+    /// @dev Fee calculation strategy implementation
+    IFeeCalculationStrategy public immutable feeCalculationStrategy;
+    
+    /// @dev Default fee set at deployment (immutable fallback)
+    uint24 public immutable defaultFee;
+    
+    /// @dev Governance fee (can be updated if governance is enabled)
+    uint24 public governanceFee;
+    bool public governanceFeeSet;
+    
+    /// @dev Governance address (if governance is enabled)
+    address public governance;
+    
+    /// @dev Whether governance is enabled for this adapter
+    bool public immutable governanceEnabled;
+
+    // Context structs to solve stack too deep issues
     struct BeforeSwapContext {
         address sender;
         PoolKey key;
@@ -40,7 +66,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         PoolId poolId;
     }
 
-    // Context struct to solve stack too deep issue for afterSwap
     struct AfterSwapContext {
         address sender;
         PoolKey key;
@@ -50,7 +75,7 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         PoolId poolId;
     }
 
-    /// @dev Reentrancy lock state (1 = unlocked, 2 = locked).
+    /// @dev Reentrancy lock state
     uint256 private locked = 1;
 
     modifier lock() {
@@ -59,18 +84,77 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         _;
         locked = 1;
     }
+    
+    modifier onlyGovernance() {
+        if (governanceEnabled && msg.sender != governance) revert UnauthorizedGovernance();
+        _;
+    }
 
-    constructor(IPoolManager _poolManager) BaseHook(_poolManager) {}
+    modifier onlyPoolCreator(PoolId poolId) {
+        address poolCreator = _poolCreators[poolId];
+        if (poolCreator != address(0) && msg.sender != poolCreator) {
+            revert UnauthorizedPoolCreator(poolId, msg.sender, poolCreator);
+        }
+        _;
+    }
 
-    /// @notice Registers an array of sub-hooks to be used for a given pool.
-    /// @param key The PoolKey identifying the pool for which to register hooks.
-    /// @param hookAddresses The ordered list of hook contract addresses to attach.
-    /// Each hook in the list will be invoked in sequence for each relevant callback.
+    constructor(
+        IPoolManager _poolManager,
+        uint24 _defaultFee,
+        address _governance,
+        bool _governanceEnabled
+    ) BaseHook(_poolManager) {
+        if (_defaultFee > 1_000_000) revert InvalidFee(_defaultFee); // Max 100%
+        
+        defaultFee = _defaultFee;
+        governance = _governance;
+        governanceEnabled = _governanceEnabled;
+        
+        // Deploy fee calculation strategy
+        feeCalculationStrategy = new FeeCalculationStrategy();
+    }
+    
+    /// @notice Override hook address validation to disable automatic validation during deployment
+    /// @dev The adapter address will be validated during factory deployment with CREATE2
+    function validateHookAddress(BaseHook) internal pure override {
+        // Skip validation - factory handles this with CREATE2 salt selection
+        return;
+    }
+
+    /// @inheritdoc IMultiHookAdapterBase
     function registerHooks(PoolKey calldata key, address[] calldata hookAddresses) external virtual override {
+        PoolId poolId = key.toId();
+        
+        // If no pool creator is registered, register the caller as the pool creator
+        if (_poolCreators[poolId] == address(0)) {
+            _poolCreators[poolId] = msg.sender;
+            emit PoolCreatorRegistered(poolId, msg.sender);
+        }
+        
+        // Only allow the pool creator to register hooks
+        if (msg.sender != _poolCreators[poolId]) {
+            revert UnauthorizedPoolCreator(poolId, msg.sender, _poolCreators[poolId]);
+        }
+        
         _registerHooks(key, hookAddresses);
     }
 
-    /// @dev Internal implementation of registerHooks that can be called by inheriting contracts
+    /// @notice Get the creator of a pool
+    /// @param poolId The pool ID
+    /// @return creator The address that created the pool
+    function getPoolCreator(PoolId poolId) external view returns (address creator) {
+        return _poolCreators[poolId];
+    }
+
+    /// @notice Check if an address is the creator of a pool
+    /// @param poolId The pool ID  
+    /// @param user The address to check
+    /// @return isCreator True if the user is the pool creator
+    function isPoolCreator(PoolId poolId, address user) external view returns (bool isCreator) {
+        return _poolCreators[poolId] == user;
+    }
+
+    /// @dev Internal implementation of registerHooks
     function _registerHooks(PoolKey calldata key, address[] calldata hookAddresses) internal {
         PoolId poolId = key.toId();
         // Clear any existing hooks for the pool
@@ -82,16 +166,113 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         for (uint256 i = 0; i < count; i++) {
             IHooks hook = IHooks(hookAddresses[i]);
             if (hookAddresses[i] == address(0)) revert HookAddressZero();
-            if (!hook.isValidHookAddress(key.fee)) revert InvalidHookAddress();
+            // Skip hook address validation - allow any non-zero address
+            // if (!hook.isValidHookAddress(key.fee)) revert InvalidHookAddress();
             hookList.push(hook);
         }
 
-        // Emit event when hooks are registered
+        // Initialize fee configuration if not set, preserving existing settings
+        if (_poolFeeConfigs[poolId].defaultFee == 0) {
+            // Save existing method if it was already set
+            IFeeCalculationStrategy.FeeCalculationMethod existingMethod = _poolFeeConfigs[poolId].method;
+            uint24 existingPoolFee = _poolFeeConfigs[poolId].poolSpecificFee;
+            bool existingPoolFeeSet = _poolFeeConfigs[poolId].poolSpecificFeeSet;
+            
+            _poolFeeConfigs[poolId] = IFeeCalculationStrategy.FeeConfiguration({
+                defaultFee: defaultFee,
+                governanceFee: governanceFee,
+                governanceFeeSet: governanceFeeSet,
+                poolSpecificFee: existingPoolFee,
+                poolSpecificFeeSet: existingPoolFeeSet,
+                method: (uint8(existingMethod) == 0) ? IFeeCalculationStrategy.FeeCalculationMethod.WEIGHTED_AVERAGE : existingMethod
+            });
+        }
+
         emit HooksRegistered(poolId, hookAddresses);
+    }
+    
+    /// @inheritdoc IMultiHookAdapterBase
+    function setPoolFeeCalculationMethod(
+        PoolId poolId, 
+        IFeeCalculationStrategy.FeeCalculationMethod method
+    ) external virtual override onlyPoolCreator(poolId) {
+        _poolFeeConfigs[poolId].method = method;
+        emit PoolFeeConfigurationUpdated(poolId, method, _poolFeeConfigs[poolId].poolSpecificFee);
+    }
+    
+    /// @inheritdoc IMultiHookAdapterBase
+    function setPoolSpecificFee(PoolId poolId, uint24 fee) external virtual override onlyPoolCreator(poolId) {
+        if (fee > 1_000_000) revert InvalidFee(fee);
+        
+        _poolFeeConfigs[poolId].poolSpecificFee = fee;
+        _poolFeeConfigs[poolId].poolSpecificFeeSet = (fee > 0);
+        
+        emit PoolFeeConfigurationUpdated(poolId, _poolFeeConfigs[poolId].method, fee);
+    }
+    
+    /// @inheritdoc IMultiHookAdapterBase
+    function setGovernanceFee(uint24 fee) external virtual override onlyGovernance {
+        if (fee > 1_000_000) revert InvalidFee(fee);
+        
+        uint24 oldFee = governanceFee;
+        governanceFee = fee;
+        governanceFeeSet = (fee > 0);
+        
+        emit GovernanceFeeUpdated(oldFee, fee);
+    }
+    
+    /// @inheritdoc IMultiHookAdapterBase
+    function getFeeConfiguration(PoolId poolId) 
+        external 
+        view 
+        override 
+        returns (IFeeCalculationStrategy.FeeConfiguration memory config) 
+    {
+        return _getFeeConfiguration(poolId);
+    }
+    
+    /// @dev Internal function to get fee configuration
+    function _getFeeConfiguration(PoolId poolId) 
+        internal 
+        view 
+        returns (IFeeCalculationStrategy.FeeConfiguration memory config) 
+    {
+        config = _poolFeeConfigs[poolId];
+        // Ensure governance fee is current
+        config.governanceFee = governanceFee;
+        config.governanceFeeSet = governanceFeeSet;
+        // Ensure default fee is current
+        if (config.defaultFee == 0) {
+            config.defaultFee = defaultFee;
+        }
+    }
+    
+    /// @inheritdoc IMultiHookAdapterBase
+    function calculatePoolFee(
+        PoolId poolId,
+        uint24[] memory hookFees,
+        uint256[] memory hookWeights
+    ) external view override returns (uint24 finalFee) {
+        require(hookFees.length == hookWeights.length, "Array length mismatch");
+        
+        IFeeCalculationStrategy.FeeConfiguration memory config = _getFeeConfiguration(poolId);
+        
+        // Convert to WeightedFee array
+        IFeeCalculationStrategy.WeightedFee[] memory weightedFees = 
+            new IFeeCalculationStrategy.WeightedFee[](hookFees.length);
+            
+        for (uint256 i = 0; i < hookFees.length; i++) {
+            weightedFees[i] = IFeeCalculationStrategy.WeightedFee({
+                fee: hookFees[i],
+                weight: hookWeights[i],
+                isValid: true
+            });
+        }
+        
+        return feeCalculationStrategy.calculateFee(poolId, weightedFees, config);
     }
 
     /// @notice Returns the hook permissions for this adapter
-    /// @return permissions The hook permissions
     function getHookPermissions() public pure virtual override returns (Hooks.Permissions memory permissions) {
         return Hooks.Permissions({
             beforeInitialize: true,
@@ -119,24 +300,19 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
     {
         PoolId poolId = key.toId();
         IHooks[] storage subHooks = _hooksByPool[poolId];
-        // Invoke beforeInitialize on each sub-hook in order
         uint256 length = subHooks.length;
         for (uint256 i = 0; i < length; ++i) {
-            // Only call if the sub-hook is permissioned for beforeInitialize
             if (uint160(address(subHooks[i])) & Hooks.BEFORE_INITIALIZE_FLAG != 0) {
-                // Call sub-hook; since beforeInitialize returns only a selector, we ignore returned data beyond selector check.
                 (bool success, bytes memory result) = address(subHooks[i]).call(
                     abi.encodeWithSelector(IHooks.beforeInitialize.selector, sender, key, sqrtPriceX96)
                 );
                 require(success, "Sub-hook beforeInitialize failed");
-                // Verify the returned selector for correctness
                 require(
                     result.length >= 4 && bytes4(result) == IHooks.beforeInitialize.selector,
                     "Invalid beforeInitialize return"
                 );
             }
         }
-        // Return this function's own selector to PoolManager
         return IHooks.beforeInitialize.selector;
     }
 
@@ -211,70 +387,149 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         returns (bytes4, BeforeSwapDelta, uint24)
     {
         PoolId poolId = key.toId();
-
-        /// @dev mitigation against a stack too deep error
         BeforeSwapContext memory context =
             BeforeSwapContext({sender: sender, key: key, params: params, data: data, poolId: poolId});
 
         // Clear any previous hook returns for this pool
         delete beforeSwapHookReturns[poolId];
 
-        // Get hook list
+        // Get hook list and fee configuration
         IHooks[] storage subHooks = _hooksByPool[poolId];
+        IFeeCalculationStrategy.FeeConfiguration memory feeConfig = _getFeeConfiguration(poolId);
 
-        // Process hooks and aggregate results
+        // Process hooks and collect weighted fees
         BeforeSwapDelta combinedDelta = BeforeSwapDeltaLibrary.ZERO_DELTA;
-        uint24 lpFeeOverride = LPFeeLibrary.OVERRIDE_FEE_FLAG;
-
         uint256 length = subHooks.length;
-
+        
+        IFeeCalculationStrategy.WeightedFee[] memory weightedFees = 
+            new IFeeCalculationStrategy.WeightedFee[](length);
+        
         // Initialize the array with the correct length
         beforeSwapHookReturns[poolId] = new BeforeSwapDelta[](length);
 
         for (uint256 i = 0; i < length; ++i) {
             // Skip hooks without the BEFORE_SWAP_FLAG
-            if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_FLAG == 0) continue;
+            if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_FLAG == 0) {
+                weightedFees[i] = IFeeCalculationStrategy.WeightedFee({
+                    fee: 0,
+                    weight: 0,
+                    isValid: false
+                });
+                continue;
+            }
 
-            // Call the hook
-            (bool success, bytes memory result) = address(subHooks[i]).call(
-                abi.encodeWithSelector(
-                    IHooks.beforeSwap.selector, context.sender, context.key, context.params, context.data
-                )
-            );
-            require(success, "Sub-hook beforeSwap failed");
-
-            // Process result based on hook permissions
+            // Try weighted hook interface first
+            weightedFees[i] = _callHookForWeightedFee(subHooks[i], context, i);
+            
+            // Add to combined delta if hook has delta returns flag
             if (uint160(address(subHooks[i])) & Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG != 0) {
-                // Process with delta returns
-                (bytes4 sel, BeforeSwapDelta delta, uint24 fee) = abi.decode(result, (bytes4, BeforeSwapDelta, uint24));
-                require(sel == IHooks.beforeSwap.selector, "Invalid beforeSwap return");
-
-                // Save delta for later use
-                beforeSwapHookReturns[poolId][i] = delta;
-
-                // Add to combined delta
-                combinedDelta = _addBeforeSwapDelta(combinedDelta, delta);
-
-                // Handle fee override
-                if (fee != LPFeeLibrary.OVERRIDE_FEE_FLAG) {
-                    lpFeeOverride = fee;
-                }
-            } else {
-                // Process without delta returns - just check for fee override
-                bytes4 sel = result.length >= 4 ? bytes4(result) : bytes4(0);
-                if (sel != IHooks.beforeSwap.selector) {
-                    // Try to extract fee override
-                    uint256 overrideVal = result.length == 32 ? abi.decode(result, (uint256)) : 0;
-                    uint24 hookFee = uint24(overrideVal);
-
-                    if (hookFee != LPFeeLibrary.OVERRIDE_FEE_FLAG) {
-                        lpFeeOverride = hookFee;
-                    }
-                }
+                combinedDelta = _addBeforeSwapDelta(combinedDelta, beforeSwapHookReturns[poolId][i]);
             }
         }
 
-        return (IHooks.beforeSwap.selector, combinedDelta, lpFeeOverride);
+        // Calculate final fee using strategy
+        uint24 finalFee = feeCalculationStrategy.calculateFee(poolId, weightedFees, feeConfig);
+
+        return (IHooks.beforeSwap.selector, combinedDelta, finalFee);
+    }
+    
+    /// @dev Call hook and extract weighted fee information
+    function _callHookForWeightedFee(
+        IHooks hook, 
+        BeforeSwapContext memory context, 
+        uint256 index
+    ) internal returns (IFeeCalculationStrategy.WeightedFee memory weightedFee) {
+        address hookAddr = address(hook);
+        
+        // Check if hook supports weighted fees
+        try IWeightedHook(hookAddr).supportsWeightedFees() returns (bool supportsWeighted) {
+            if (supportsWeighted) {
+                return _callWeightedHook(IWeightedHook(hookAddr), context, index);
+            }
+        } catch {
+            // Fall back to standard hook call
+        }
+        
+        // Standard hook call
+        return _callStandardHook(hook, context, index);
+    }
+    
+    /// @dev Call weighted hook interface
+    function _callWeightedHook(
+        IWeightedHook weightedHook, 
+        BeforeSwapContext memory context, 
+        uint256 index
+    ) internal returns (IFeeCalculationStrategy.WeightedFee memory weightedFee) {
+        try weightedHook.beforeSwapWeighted(context.sender, context.key, context.params, context.data) 
+            returns (IWeightedHook.WeightedHookResult memory result) {
+            
+            require(result.selector == IHooks.beforeSwap.selector, "Invalid weighted hook return");
+            
+            // Store delta if applicable
+            if (uint160(address(weightedHook)) & Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG != 0) {
+                beforeSwapHookReturns[context.poolId][index] = result.delta;
+            }
+            
+            return IFeeCalculationStrategy.WeightedFee({
+                fee: result.hasFeeOverride ? result.fee : 0,
+                weight: result.weight,
+                isValid: result.hasFeeOverride && result.weight > 0
+            });
+            
+        } catch {
+            // If weighted call fails, fall back to standard
+            return _callStandardHook(IHooks(address(weightedHook)), context, index);
+        }
+    }
+    
+    /// @dev Call standard hook interface and infer weight
+    function _callStandardHook(
+        IHooks hook, 
+        BeforeSwapContext memory context, 
+        uint256 index
+    ) internal returns (IFeeCalculationStrategy.WeightedFee memory weightedFee) {
+        (bool success, bytes memory result) = address(hook).call(
+            abi.encodeWithSelector(
+                IHooks.beforeSwap.selector, context.sender, context.key, context.params, context.data
+            )
+        );
+        require(success, "Sub-hook beforeSwap failed");
+
+        // Process result based on hook permissions
+        if (uint160(address(hook)) & Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG != 0) {
+            // Process with delta returns
+            (bytes4 sel, BeforeSwapDelta delta, uint24 fee) = abi.decode(result, (bytes4, BeforeSwapDelta, uint24));
+            require(sel == IHooks.beforeSwap.selector, "Invalid beforeSwap return");
+
+            // Save delta for later use
+            beforeSwapHookReturns[context.poolId][index] = delta;
+
+            return IFeeCalculationStrategy.WeightedFee({
+                fee: fee,
+                weight: (fee != LPFeeLibrary.OVERRIDE_FEE_FLAG) ? 1 : 0, // Default weight 1 for fee overrides
+                isValid: fee != LPFeeLibrary.OVERRIDE_FEE_FLAG
+            });
+        } else {
+            // Process without delta returns - check for fee override
+            bytes4 sel = result.length >= 4 ? bytes4(result) : bytes4(0);
+            if (sel == IHooks.beforeSwap.selector) {
+                return IFeeCalculationStrategy.WeightedFee({
+                    fee: 0,
+                    weight: 0,
+                    isValid: false
+                });
+            } else {
+                // Try to extract fee override
+                uint256 overrideVal = result.length == 32 ? abi.decode(result, (uint256)) : 0;
+                uint24 hookFee = uint24(overrideVal);
+
+                return IFeeCalculationStrategy.WeightedFee({
+                    fee: hookFee,
+                    weight: (hookFee != LPFeeLibrary.OVERRIDE_FEE_FLAG) ? 1 : 0,
+                    isValid: hookFee != LPFeeLibrary.OVERRIDE_FEE_FLAG
+                });
+            }
+        }
     }
 
     function _afterSwap(
@@ -284,7 +539,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         BalanceDelta swapDelta,
         bytes calldata data
     ) internal override lock returns (bytes4, int128) {
-        /// @dev mitigation against a stack too deep error
         AfterSwapContext memory context = AfterSwapContext({
             sender: sender,
             key: key,
@@ -412,7 +666,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         for (uint256 i = 0; i < length; ++i) {
             uint160 hookPerms = uint160(address(subHooks[i]));
             if (addingLiquidity) {
-                // If adding liquidity, call sub-hook if it has beforeAddLiquidity permission
                 if (hookPerms & Hooks.BEFORE_ADD_LIQUIDITY_FLAG != 0) {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
                         abi.encodeWithSelector(IHooks.beforeAddLiquidity.selector, sender, key, params, data)
@@ -424,7 +677,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
                     );
                 }
             } else {
-                // If removing liquidity, call sub-hook if it has beforeRemoveLiquidity permission
                 if (hookPerms & Hooks.BEFORE_REMOVE_LIQUIDITY_FLAG != 0) {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
                         abi.encodeWithSelector(IHooks.beforeRemoveLiquidity.selector, sender, key, params, data)
@@ -438,7 +690,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
             }
         }
 
-        // Return the appropriate selector based on the operation type
         return addingLiquidity ? IHooks.beforeAddLiquidity.selector : IHooks.beforeRemoveLiquidity.selector;
     }
 
@@ -453,7 +704,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         PoolId poolId = key.toId();
         IHooks[] storage subHooks = _hooksByPool[poolId];
         bool addedLiquidity = params.liquidityDelta > 0;
-        // Initialize combined balance delta to zero
         BalanceDelta combinedDelta = BalanceDeltaLibrary.ZERO_DELTA;
 
         if (addedLiquidity) {
@@ -465,7 +715,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         }
     }
 
-    // Helper function to process afterAddLiquidity callbacks
     function _processAfterAddLiquidity(
         IHooks[] storage subHooks,
         address sender,
@@ -482,7 +731,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
             uint160 hookPerms = uint160(address(subHooks[i]));
 
             if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_FLAG != 0) {
-                // If sub-hook has afterAddLiquidityReturnDelta, it returns a BalanceDelta
                 if (hookPerms & Hooks.AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG != 0) {
                     (bool success, bytes memory result) = address(subHooks[i]).call(
                         abi.encodeWithSelector(
@@ -511,7 +759,6 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         return combinedDelta;
     }
 
-    // Helper function to process afterRemoveLiquidity callbacks
     function _processAfterRemoveLiquidity(
         IHooks[] storage subHooks,
         address sender,

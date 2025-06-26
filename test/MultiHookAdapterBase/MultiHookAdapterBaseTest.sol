@@ -57,7 +57,7 @@ contract MultiHookAdapterBaseTest is Test, Deployers {
 
         // Deploy adapter to a valid hook address using deployCodeTo
         address adapterAddress = address(uint160(adapterFlags));
-        deployCodeTo("TestMultiHookAdapter.sol", abi.encode(manager), adapterAddress);
+        deployCodeTo("TestMultiHookAdapter.sol", abi.encode(manager, 3000, address(this), true), adapterAddress);
         adapter = TestMultiHookAdapter(adapterAddress);
 
         // Deploy each hook with its specific flag
