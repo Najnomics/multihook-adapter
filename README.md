@@ -22,7 +22,7 @@ The MultiHookAdapter acts as an intelligent routing and aggregation layer betwee
 
 - **Hook Execution Orchestration**: Manages ordered execution of multiple hooks for each lifecycle callback
 - **Delta Aggregation**: Combines return values from hooks that modify balances
-- **Fee Override Resolution**: Handles potential conflicts when multiple hooks try to override swap fees (currently, last hook wins)
+- **Fee Override Resolution**: Handles potential conflicts when multiple hooks try to override swap fees 
 - **Reentrancy Protection**: Ensures secure execution of hook callbacks
 
 ## Unlocking Composability in Uniswap V4
