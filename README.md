@@ -343,24 +343,7 @@ constructor(
 - [ ] Integration examples with popular hook patterns
 - [ ] Advanced documentation and tutorials
 
-## Contract Size Optimization
 
-**✅ Problem Solved**: The original MultiHookAdapterFactory exceeded the Ethereum contract size limit (24,576 bytes) by over 2X at 51,557 bytes.
-
-**✅ Solution Implemented**: Modular factory architecture with specialized contracts:
-
-| Contract | Size (bytes) | Status | Description |
-|----------|--------------|--------|-------------|
-| MultiHookAdapterFactory | 1,441 | ✅ Optimized | Main coordinator factory |
-| BasicAdapterFactory | 1,767 | ✅ Within limit | Deploys immutable adapters |
-| PermissionedAdapterFactory | 1,358 | ✅ Within limit | Deploys governance adapters |
-
-**Key Optimizations**:
-- Split monolithic factory into specialized components
-- Created reusable deployment libraries
-- Extracted bytecode generation to external libraries
-- Achieved **97% size reduction** in main factory
-- All contracts now well under the 24KB limit
 
 ## Production Readiness
 
