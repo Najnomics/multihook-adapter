@@ -25,11 +25,15 @@ import {FeeCalculationStrategy} from "../strategies/FeeCalculationStrategy.sol";
 /// @notice Unified adapter contract with complete hook aggregation logic and advanced fee calculation strategies
 /// @dev Supports weighted fee calculations, multiple strategies, flexible governance, and all hook lifecycle callbacks
 /// @dev Consolidates functionality from MultiHookAdapterBase and MultiHookAdapterBaseV2 into a single unified contract
+/// @dev Now includes pool creator tracking to restrict hook management to pool creators
 abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
     using Hooks for IHooks;
 
     /// @dev Mapping from PoolId to an ordered list of hook contracts
     mapping(PoolId => IHooks[]) internal _hooksByPool;
+
+    /// @dev Mapping from PoolId to the pool creator address
+    mapping(PoolId => address) internal _poolCreators;
 
     /// @dev Temporary storage for beforeSwap returns of sub-hooks, keyed by PoolId
     mapping(PoolId => BeforeSwapDelta[]) internal beforeSwapHookReturns;
@@ -86,6 +90,14 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
         _;
     }
 
+    modifier onlyPoolCreator(PoolId poolId) {
+        address poolCreator = _poolCreators[poolId];
+        if (poolCreator != address(0) && msg.sender != poolCreator) {
+            revert UnauthorizedPoolCreator(poolId, msg.sender, poolCreator);
+        }
+        _;
+    }
+
     constructor(
         IPoolManager _poolManager,
         uint24 _defaultFee,
@@ -111,7 +123,35 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
 
     /// @inheritdoc IMultiHookAdapterBase
     function registerHooks(PoolKey calldata key, address[] calldata hookAddresses) external virtual override {
+        PoolId poolId = key.toId();
+        
+        // If no pool creator is registered, register the caller as the pool creator
+        if (_poolCreators[poolId] == address(0)) {
+            _poolCreators[poolId] = msg.sender;
+            emit PoolCreatorRegistered(poolId, msg.sender);
+        }
+        
+        // Only allow the pool creator to register hooks
+        if (msg.sender != _poolCreators[poolId]) {
+            revert UnauthorizedPoolCreator(poolId, msg.sender, _poolCreators[poolId]);
+        }
+        
         _registerHooks(key, hookAddresses);
+    }
+
+    /// @notice Get the creator of a pool
+    /// @param poolId The pool ID
+    /// @return creator The address that created the pool
+    function getPoolCreator(PoolId poolId) external view returns (address creator) {
+        return _poolCreators[poolId];
+    }
+
+    /// @notice Check if an address is the creator of a pool
+    /// @param poolId The pool ID  
+    /// @param user The address to check
+    /// @return isCreator True if the user is the pool creator
+    function isPoolCreator(PoolId poolId, address user) external view returns (bool isCreator) {
+        return _poolCreators[poolId] == user;
     }
 
     /// @dev Internal implementation of registerHooks
@@ -155,13 +195,13 @@ abstract contract MultiHookAdapterBase is BaseHook, IMultiHookAdapterBase {
     function setPoolFeeCalculationMethod(
         PoolId poolId, 
         IFeeCalculationStrategy.FeeCalculationMethod method
-    ) external virtual override onlyGovernance {
+    ) external virtual override onlyPoolCreator(poolId) {
         _poolFeeConfigs[poolId].method = method;
         emit PoolFeeConfigurationUpdated(poolId, method, _poolFeeConfigs[poolId].poolSpecificFee);
     }
     
     /// @inheritdoc IMultiHookAdapterBase
-    function setPoolSpecificFee(PoolId poolId, uint24 fee) external virtual override onlyGovernance {
+    function setPoolSpecificFee(PoolId poolId, uint24 fee) external virtual override onlyPoolCreator(poolId) {
         if (fee > 1_000_000) revert InvalidFee(fee);
         
         _poolFeeConfigs[poolId].poolSpecificFee = fee;

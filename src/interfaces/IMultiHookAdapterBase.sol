@@ -27,11 +27,19 @@ interface IMultiHookAdapterBase {
     
     /// @notice Thrown when caller is not authorized for governance operations
     error UnauthorizedGovernance();
+    
+    /// @notice Thrown when caller is not the pool creator
+    error UnauthorizedPoolCreator(PoolId poolId, address caller, address poolCreator);
 
     /// @notice Emitted when hooks are registered for a pool
     /// @param poolId The ID of the pool for which hooks were registered
     /// @param hookAddresses The addresses of the hooks registered
     event HooksRegistered(PoolId indexed poolId, address[] hookAddresses);
+    
+    /// @notice Emitted when a pool creator is registered
+    /// @param poolId The pool ID
+    /// @param creator The address that created the pool
+    event PoolCreatorRegistered(PoolId indexed poolId, address indexed creator);
     
     /// @notice Emitted when fee configuration is updated for a pool
     /// @param poolId The pool ID
@@ -89,4 +97,15 @@ interface IMultiHookAdapterBase {
         uint24[] memory hookFees,
         uint256[] memory hookWeights
     ) external view returns (uint24 finalFee);
+    
+    /// @notice Get the creator of a pool
+    /// @param poolId The pool ID
+    /// @return creator The address that created the pool
+    function getPoolCreator(PoolId poolId) external view returns (address creator);
+    
+    /// @notice Check if an address is the creator of a pool
+    /// @param poolId The pool ID  
+    /// @param user The address to check
+    /// @return isCreator True if the user is the pool creator
+    function isPoolCreator(PoolId poolId, address user) external view returns (bool isCreator);
 }
