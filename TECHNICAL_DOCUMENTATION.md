@@ -140,23 +140,29 @@ contract MultiHookAdapter is MultiHookAdapterBase {
 - Audited hook combinations with validated security properties
 
 ### 3. PermissionedMultiHookAdapter
-**Governance-controlled implementation with dynamic hook management**
+**Pool creator access control with approved hook registry**
 
 ```solidity
 contract PermissionedMultiHookAdapter is MultiHookAdapterBase {
-    // Dynamic hook addition/removal for live pools
-    // Governance-controlled hook approval registry
-    // Hook manager role for operational management
-    // Advanced access controls and validation
+    // Pool creator-controlled hook management for individual pools
+    // Governance/hook manager-controlled hook approval registry
+    // Dual-layer access control: approval + pool creator permissions
+    // Advanced validation and security controls
 }
 ```
 
 **Advanced Features:**
-- ✅ **Dynamic Hook Management**: Add/remove hooks from live pools
-- ✅ **Hook Approval Registry**: Governance-controlled security whitelist
-- ✅ **Role-Based Access**: Separate governance and hook management roles
+- ✅ **Dynamic Hook Management**: Pool creators can add/remove hooks from their pools
+- ✅ **Hook Approval Registry**: Governance/hook manager-controlled security whitelist
+- ✅ **Pool Creator Access Control**: Only pool creators can manage their specific pools
+- ✅ **Dual-Layer Security**: Hooks must be approved AND pool creator must authorize
 - ✅ **Batch Operations**: Efficient bulk hook operations
-- ✅ **Pool Evolution**: Adapt strategies without liquidity migration
+- ✅ **Pool Evolution**: Pool creators can adapt strategies without liquidity migration
+
+**Access Control Model:**
+- **Hook Approval**: Governance/Hook Manager controls which hooks are available system-wide
+- **Pool Management**: Pool Creators control their specific pools (first registrant becomes creator)
+- **Fee Configuration**: Pool creators can set pool-specific fees and calculation methods
 
 ### 4. Factory System
 **Sophisticated deployment infrastructure**
@@ -404,7 +410,20 @@ modifier onlyHookManager() {
     require(msg.sender == hookManager, "Unauthorized hook management");
     _;
 }
+
+modifier onlyPoolCreatorForHooks(PoolId poolId) {
+    address poolCreator = _poolCreators[poolId];
+    if (poolCreator != address(0) && msg.sender != poolCreator) {
+        revert UnauthorizedPoolCreator(poolId, msg.sender, poolCreator);
+    }
+    _;
+}
 ```
+
+**Access Control Hierarchy:**
+- **Hook Approval**: `onlyHookManager` - Controls which hooks are available system-wide
+- **Governance Functions**: `onlyGovernance` - Controls global settings (governance fee, hook manager)
+- **Pool Management**: `onlyPoolCreatorForHooks` - Pool creators control their specific pools
 
 #### Hook Validation
 ```solidity
@@ -421,15 +440,13 @@ function _validateHook(address hook) private view {
 
 ### Core Interfaces
 
-#### IMultiHookAdapterBaseV2
+#### IMultiHookAdapterBase
 Main interface for adapter functionality
 
 ```solidity
-interface IMultiHookAdapterBaseV2 {
+interface IMultiHookAdapterBase {
     // Hook Management
     function registerHooks(PoolKey calldata key, address[] calldata hookAddresses) external;
-    function areHooksRegistered(PoolId poolId) external view returns (bool);
-    function getPoolHooks(PoolId poolId) external view returns (address[] memory);
     
     // Fee Configuration
     function setPoolFeeCalculationMethod(
@@ -437,57 +454,102 @@ interface IMultiHookAdapterBaseV2 {
         IFeeCalculationStrategy.FeeCalculationMethod method
     ) external;
     function setPoolSpecificFee(PoolId poolId, uint24 fee) external;
-    function getFeeConfiguration(PoolId poolId) external view returns (FeeConfiguration memory);
+    function setGovernanceFee(uint24 fee) external;
+    function getFeeConfiguration(PoolId poolId) 
+        external 
+        view 
+        returns (IFeeCalculationStrategy.FeeConfiguration memory config);
     
     // Fee Calculation
     function calculatePoolFee(
-        PoolId poolId, 
-        uint24[] calldata hookFees, 
-        uint256[] calldata hookWeights
-    ) external view returns (uint24);
+        PoolId poolId,
+        uint24[] memory hookFees,
+        uint256[] memory hookWeights
+    ) external view returns (uint24 finalFee);
+    
+    // Pool Creator Functions
+    function getPoolCreator(PoolId poolId) external view returns (address creator);
+    function isPoolCreator(PoolId poolId, address user) external view returns (bool isCreator);
     
     // Events
     event HooksRegistered(PoolId indexed poolId, address[] hookAddresses);
-    event PoolFeeConfigurationUpdated(PoolId indexed poolId, FeeCalculationMethod method, uint24 poolSpecificFee);
+    event PoolCreatorRegistered(PoolId indexed poolId, address indexed creator);
+    event PoolFeeConfigurationUpdated(
+        PoolId indexed poolId, 
+        IFeeCalculationStrategy.FeeCalculationMethod method,
+        uint24 poolSpecificFee
+    );
+    event GovernanceFeeUpdated(uint24 oldFee, uint24 newFee);
     
     // Errors
+    error HookAddressZero();
+    error InvalidHookAddress();
+    error Reentrancy();
     error InvalidFee(uint24 fee);
-    error HooksAlreadyRegistered(PoolId poolId);
-    error InvalidHookAddress(address hook);
+    error InvalidFeeCalculationMethod();
+    error UnauthorizedGovernance();
+    error UnauthorizedPoolCreator(PoolId poolId, address caller, address poolCreator);
 }
 ```
+
+**Note**: Additional functions like `areHooksRegistered()` and `getPoolHooks()` are available in specific implementations:
+- `areHooksRegistered()`: Available in `MultiHookAdapter` (immutable version)
+- `getPoolHooks()`: Available in `PermissionedMultiHookAdapter` (for dynamic hook management)
 
 #### IFeeCalculationStrategy
 Fee calculation strategy interface
 
 ```solidity
 interface IFeeCalculationStrategy {
-    enum FeeCalculationMethod {
-        WEIGHTED_AVERAGE,  // 0: (Σ(fee[i] * weight[i])) / Σ(weight[i])
-        MEAN,             // 1: Σ(fee[i]) / count(fees)
-        MEDIAN,           // 2: middle_value(sorted(fees))
-        FIRST_OVERRIDE,   // 3: First hook with non-zero fee override
-        LAST_OVERRIDE,    // 4: Last hook with non-zero fee override
-        MIN_FEE,          // 5: min(fees)
-        MAX_FEE,          // 6: max(fees)
-        GOVERNANCE_ONLY   // 7: Use only governance fee, ignore hooks
+    /// @notice Represents a hook's fee contribution with weight
+    struct WeightedFee {
+        uint24 fee;      // Fee in basis points (e.g., 3000 = 0.3%)
+        uint256 weight;  // Weight for this fee (0 = skip this hook)
+        bool isValid;    // Whether this fee is valid
     }
     
+    /// @notice Fee configuration for a pool
     struct FeeConfiguration {
-        uint24 defaultFee;
-        uint24 governanceFee;
-        bool governanceFeeSet;
-        uint24 poolSpecificFee;
-        bool poolSpecificFeeSet;
-        FeeCalculationMethod method;
+        uint24 defaultFee;      // Immutable fallback fee set at deployment
+        uint24 governanceFee;   // Optional governance override (0 = not set)
+        bool governanceFeeSet;  // Whether governance fee is active
+        uint24 poolSpecificFee; // Pool-specific override (0 = not set)
+        bool poolSpecificFeeSet; // Whether pool-specific fee is active
+        FeeCalculationMethod method; // Calculation method for this pool
     }
     
+    /// @notice Available fee calculation methods
+    enum FeeCalculationMethod {
+        WEIGHTED_AVERAGE,    // Default: weighted average of all hook fees
+        MEAN,               // Arithmetic mean of all valid fees
+        MEDIAN,             // Median of all valid fees
+        FIRST_OVERRIDE,     // First hook with valid fee wins
+        LAST_OVERRIDE,      // Last hook with valid fee wins
+        MIN_FEE,            // Minimum fee from all hooks
+        MAX_FEE,            // Maximum fee from all hooks
+        GOVERNANCE_ONLY     // Only use governance/default fees, ignore hooks
+    }
+    
+    /// @notice Calculate the final fee for a pool given hook contributions
+    /// @param poolId The pool identifier
+    /// @param weightedFees Array of weighted fee contributions from hooks
+    /// @param config Fee configuration for this pool
+    /// @return finalFee The calculated fee in basis points
     function calculateFee(
         PoolId poolId,
-        uint24[] calldata hookFees,
-        uint256[] calldata hookWeights,
-        FeeConfiguration calldata config
-    ) external pure returns (uint24);
+        WeightedFee[] memory weightedFees,
+        FeeConfiguration memory config
+    ) external pure returns (uint24 finalFee);
+    
+    /// @notice Validate that a fee is within acceptable bounds
+    /// @param fee Fee to validate in basis points
+    /// @return isValid Whether the fee is valid
+    function isValidFee(uint24 fee) external pure returns (bool isValid);
+    
+    /// @notice Get the fallback fee using priority: poolSpecific -> governance -> default
+    /// @param config Fee configuration for this pool
+    /// @return fallbackFee The appropriate fallback fee
+    function getFallbackFee(FeeConfiguration memory config) external pure returns (uint24 fallbackFee);
 }
 ```
 
@@ -599,15 +661,15 @@ The project includes comprehensive test coverage across multiple dimensions:
 
 #### 3. Implementation Tests (Concrete Contracts)
 - **MultiHookAdapter Tests**: Immutable implementation behavior
-- **PermissionedMultiHookAdapter Tests**: Governance and hook management
+- **PermissionedMultiHookAdapter Tests**: Pool creator access control and hook approval management
 - **RegisterHooks Tests**: Hook registration workflows
 
 #### 4. Factory Tests (Deployment Infrastructure)
 - **MultiHookAdapterFactory Tests**: CREATE2 deployment patterns
 - **AdapterDeploymentHelper Tests**: High-level deployment workflows
 
-#### 5. Advanced Testing (V2 Features)
-- **MultiHookAdapterV2 Tests**: Enhanced fee calculation integration
+#### 5. Advanced Testing (Enhanced Features)
+- **Enhanced MultiHookAdapter Tests**: Advanced fee calculation integration
 - **Fee Strategy Tests**: All calculation method validations
 - **Edge Case Tests**: Error conditions and boundary cases
 

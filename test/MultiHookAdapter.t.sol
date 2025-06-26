@@ -518,21 +518,49 @@ contract MultiHookAdapterTest is Test, Deployers {
     // Access Control Tests         //
     //////////////////////////////////
 
-    function test_SetPoolFeeCalculationMethod_OnlyGovernance() public {
-        vm.expectRevert(IMultiHookAdapterBase.UnauthorizedGovernance.selector);
+    function test_SetPoolFeeCalculationMethod_OnlyPoolCreator() public {
+        address poolCreator = address(0x5555);
+        
+        // First establish a pool creator by registering hooks
+        address[] memory hooks = new address[](1);
+        hooks[0] = address(0x1000);
+        vm.prank(poolCreator);
+        adapter.registerHooks(poolKey, hooks);
+        
+        // Non-pool creator should not be able to set fee method
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            address(this), // test contract address
+            poolCreator
+        ));
         adapter.setPoolFeeCalculationMethod(poolId, IFeeCalculationStrategy.FeeCalculationMethod.MEAN);
 
-        // Should work with governance
-        vm.prank(GOVERNANCE);
+        // Should work with pool creator
+        vm.prank(poolCreator);
         adapter.setPoolFeeCalculationMethod(poolId, IFeeCalculationStrategy.FeeCalculationMethod.MEAN);
     }
 
-    function test_SetPoolSpecificFee_OnlyGovernance() public {
-        vm.expectRevert(IMultiHookAdapterBase.UnauthorizedGovernance.selector);
+    function test_SetPoolSpecificFee_OnlyPoolCreator() public {
+        address poolCreator = address(0x5555);
+        
+        // First establish a pool creator by registering hooks
+        address[] memory hooks = new address[](1);
+        hooks[0] = address(0x1000);
+        vm.prank(poolCreator);
+        adapter.registerHooks(poolKey, hooks);
+        
+        // Non-pool creator should not be able to set pool specific fee
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            address(this), // test contract address
+            poolCreator
+        ));
         adapter.setPoolSpecificFee(poolId, 2500);
 
-        // Should work with governance
-        vm.prank(GOVERNANCE);
+        // Should work with pool creator
+        vm.prank(poolCreator);
         adapter.setPoolSpecificFee(poolId, 2500);
     }
 

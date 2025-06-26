@@ -118,18 +118,24 @@ Ideal for scenarios where deterministic pool behavior is essential, allowing liq
 
 ### PermissionedMultiHookAdapter
 
-Features a permissioned registry of approved hooks maintained by governance or designated auditors. Pools using this adapter can only add or remove hooks that have been pre-approved and added to this registry.
+Features a permissioned registry of approved hooks maintained by governance or designated auditors, with **pool creator access control** for hook management. Only approved hooks can be used, but individual pool creators maintain full control over their pools' hook configurations.
 
 **Key Points:**
-- Hooks must first be audited and approved by the permissioned body
+- Hooks must first be audited and approved by the governance/hook manager
 - Only approved hooks can be added to pools
-- Provides flexibility while maintaining security guarantees
-- Enables governance to adapt pool behaviors over time with vetted components
+- **Pool creators have exclusive control over their pools** - only the address that first registers hooks for a pool can manage that pool's hooks and fee configuration
+- Provides flexibility while maintaining security guarantees through pre-approved hooks
+- Enables pool creators to adapt their pool behaviors over time with vetted components
+
+**Access Control Model:**
+- **Hook Approval**: Governance/Hook Manager controls which hooks are available for use
+- **Pool Management**: Pool Creators control their specific pools (hook registration, fee configuration, adding/removing hooks)
+- **First Registration**: The first address to register hooks for a pool becomes the pool creator for that pool
 
 **Use Cases:**
-- DAO-governed pools adapting to market conditions
-- Protocol-owned liquidity with evolving strategies
-- Beta features requiring potential updates
+- Individual pools with creator-controlled strategies using pre-approved hooks
+- DeFi protocols providing curated hook libraries for their users
+- Pool creators adapting to market conditions with approved, audited components
 
 ## Deployment
 

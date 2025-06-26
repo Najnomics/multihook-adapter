@@ -10,6 +10,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IFeeCalculationStrategy} from "../src/interfaces/IFeeCalculationStrategy.sol";
+import {IMultiHookAdapterBase} from "../src/interfaces/IMultiHookAdapterBase.sol";
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 
 contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
@@ -27,8 +28,8 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     event HookApproved(address indexed hook, address indexed approver);
     event HookApprovalRevoked(address indexed hook, address indexed revoker);
     event HookManagerUpdated(address indexed oldManager, address indexed newManager);
-    event HooksAdded(PoolId indexed poolId, address[] addedHooks);
-    event HooksRemoved(PoolId indexed poolId, address[] removedHooks);
+    event HooksAdded(PoolId indexed poolId, address[] addedHooks, address indexed poolCreator);
+    event HooksRemoved(PoolId indexed poolId, address[] removedHooks, address indexed poolCreator);
     event HooksRegistered(PoolId indexed poolId, address[] hookAddresses);
 
     function setUp() public {
@@ -237,14 +238,27 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     }
 
     function test_RegisterHooks_UnauthorizedCaller() public {
+        address poolCreator = address(0x5555);
+        address notPoolCreator = address(0x6666);
+        
         address[] memory hooks = new address[](1);
         hooks[0] = address(0x1000);
         
         vm.prank(HOOK_MANAGER);
         adapter.approveHook(hooks[0]);
         
-        // Non-hook-manager should not be able to register
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
+        // First caller becomes the pool creator
+        vm.prank(poolCreator);
+        adapter.registerHooks(poolKey, hooks);
+        
+        // Different caller should not be able to register hooks for the same pool
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
         adapter.registerHooks(poolKey, hooks);
     }
 
@@ -253,14 +267,16 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     //////////////////////////////////
 
     function test_AddHooksToPool_Success() public {
-        // First register some hooks
+        address poolCreator = address(0x5555);
+        
+        // First register some hooks as pool creator
         address[] memory initialHooks = new address[](1);
         initialHooks[0] = address(0x1000);
         
         vm.prank(HOOK_MANAGER);
         adapter.batchApproveHooks(initialHooks);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.registerHooks(poolKey, initialHooks);
         
         // Add more hooks
@@ -272,9 +288,9 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
         adapter.batchApproveHooks(newHooks);
         
         vm.expectEmit(true, false, false, true);
-        emit HooksAdded(poolId, newHooks);
+        emit HooksAdded(poolId, newHooks, poolCreator);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.addHooksToPool(poolId, newHooks);
         
         // Verify all hooks are present
@@ -299,6 +315,8 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     }
 
     function test_RemoveHooksFromPool_Success() public {
+        address poolCreator = address(0x5555);
+        
         address[] memory hooks = new address[](3);
         hooks[0] = address(0x1000);
         hooks[1] = address(0x2000);
@@ -307,7 +325,7 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
         vm.prank(HOOK_MANAGER);
         adapter.batchApproveHooks(hooks);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.registerHooks(poolKey, hooks);
         
         // Remove middle hook
@@ -315,9 +333,9 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
         hooksToRemove[0] = address(0x2000);
         
         vm.expectEmit(true, false, false, true);
-        emit HooksRemoved(poolId, hooksToRemove);
+        emit HooksRemoved(poolId, hooksToRemove, poolCreator);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.removeHooksFromPool(poolId, hooksToRemove);
         
         // Verify hook was removed
@@ -443,13 +461,37 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     //////////////////////////////////
 
     function test_GovernanceOnlyFunctions() public {
-        // Non-governance should not be able to call these functions
-        vm.expectRevert();
+        address poolCreator = address(0x5555);
+        address notPoolCreator = address(0x6666);
+        
+        // First establish a pool creator by registering hooks
+        address[] memory hooks = new address[](1);
+        hooks[0] = address(0x1000);
+        vm.prank(HOOK_MANAGER);
+        adapter.approveHook(address(0x1000));
+        vm.prank(poolCreator);
+        adapter.registerHooks(poolKey, hooks);
+        
+        // Non-pool creators should not be able to call these functions
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
         adapter.setPoolFeeCalculationMethod(poolId, IFeeCalculationStrategy.FeeCalculationMethod.MEAN);
         
-        vm.expectRevert();
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
         adapter.setPoolSpecificFee(poolId, 2500);
         
+        // Governance functions should still work for governance-only operations
         vm.expectRevert();
         adapter.setGovernanceFee(2000);
         
@@ -458,27 +500,55 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     }
 
     function test_HookManagerOnlyFunctions() public {
-        // Non-hook-manager should not be able to call these functions
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
+        address poolCreator = address(0x5555);
+        address notPoolCreator = address(0x6666);
+        
+        // First establish a pool creator by registering hooks
+        address[] memory hooks = new address[](1);
+        hooks[0] = address(0x1000);
+        vm.prank(HOOK_MANAGER);
         adapter.approveHook(address(0x1000));
+        vm.prank(poolCreator);
+        adapter.registerHooks(poolKey, hooks);
+        
+        // Non-hook-manager should not be able to call hook approval functions
+        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
+        adapter.approveHook(address(0x2000));
         
         vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
         adapter.revokeHookApproval(address(0x1000));
         
-        address[] memory hooks = new address[](1);
-        hooks[0] = address(0x1000);
+        // But pool management functions are now controlled by pool creators, not hook manager
+        address[] memory newHooks = new address[](1);
+        newHooks[0] = address(0x2000);
         
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
-        adapter.registerHooks(poolKey, hooks);
+        // Non-pool creator cannot manage pool hooks
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
+        adapter.addHooksToPool(poolId, newHooks);
         
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
-        adapter.addHooksToPool(poolId, hooks);
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
+        adapter.removeHooksFromPool(poolId, newHooks);
         
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
-        adapter.removeHooksFromPool(poolId, hooks);
-        
-        vm.expectRevert(PermissionedMultiHookAdapter.UnauthorizedHookManagement.selector);
-        adapter.replacePoolHooks(poolId, hooks);
+        vm.prank(notPoolCreator);
+        vm.expectRevert(abi.encodeWithSelector(
+            IMultiHookAdapterBase.UnauthorizedPoolCreator.selector,
+            poolId,
+            notPoolCreator,
+            poolCreator
+        ));
+        adapter.replacePoolHooks(poolId, newHooks);
     }
 
     //////////////////////////////////
@@ -486,6 +556,8 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
     //////////////////////////////////
 
     function test_FullWorkflow_WithDynamicHookManagement() public {
+        address poolCreator = address(0x5555);
+        
         // 1. Approve initial hooks
         address[] memory initialHooks = new address[](2);
         initialHooks[0] = address(0x1000);
@@ -494,32 +566,32 @@ contract PermissionedMultiHookAdapterConcreteTest is Test, Deployers {
         vm.prank(HOOK_MANAGER);
         adapter.batchApproveHooks(initialHooks);
         
-        // 2. Register hooks for pool
-        vm.prank(HOOK_MANAGER);
+        // 2. Register hooks for pool as pool creator
+        vm.prank(poolCreator);
         adapter.registerHooks(poolKey, initialHooks);
         
-        // 3. Set fee configuration
-        vm.prank(GOVERNANCE);
+        // 3. Set fee configuration as pool creator
+        vm.prank(poolCreator);
         adapter.setPoolFeeCalculationMethod(poolId, IFeeCalculationStrategy.FeeCalculationMethod.MEDIAN);
         
-        vm.prank(GOVERNANCE);
+        vm.prank(poolCreator);
         adapter.setPoolSpecificFee(poolId, 1500);
         
-        // 4. Add more hooks dynamically
+        // 4. Add more hooks dynamically as pool creator
         address[] memory additionalHooks = new address[](1);
         additionalHooks[0] = address(0x3000);
         
         vm.prank(HOOK_MANAGER);
         adapter.batchApproveHooks(additionalHooks);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.addHooksToPool(poolId, additionalHooks);
         
-        // 5. Remove a hook
+        // 5. Remove a hook as pool creator
         address[] memory hooksToRemove = new address[](1);
         hooksToRemove[0] = address(0x2000);
         
-        vm.prank(HOOK_MANAGER);
+        vm.prank(poolCreator);
         adapter.removeHooksFromPool(poolId, hooksToRemove);
         
         // 6. Verify final state
